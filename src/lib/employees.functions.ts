@@ -22,12 +22,14 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     if (profileError || !profile?.company_id) throw new Error("Empresa não encontrada.");
 
-    const { data: isAdmin, error: roleError } = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "admin",
-    });
+    const { data: adminRole, error: roleError } = await context.supabase
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", context.userId)
+      .eq("role", "admin")
+      .maybeSingle();
 
-    if (roleError || !isAdmin) throw new Error("Somente administradores podem cadastrar funcionários.");
+    if (roleError || !adminRole) throw new Error("Somente administradores podem cadastrar funcionários.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
