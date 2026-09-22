@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 
-const employeeSchema = z.object({ email: z.string().email(), password: z.string().min(8), fullName: z.string().trim().min(2).max(100), jobTitle: z.string().trim().min(2).max(80) });
+const employeeSchema = z.object({ email: z.string().email(), password: z.string().min(8), fullName: z.string().trim().min(2).max(100), jobTitle: z.string().trim().min(2).max(80), workStart: z.string().regex(/^\d{2}:\d{2}$/).or(z.literal("")), workEnd: z.string().regex(/^\d{2}:\d{2}$/).or(z.literal("")), breakMinutes: z.coerce.number().int().min(0).max(480) });
 const updateEmployeeSchema = employeeSchema.extend({ userId: z.string().uuid(), password: z.union([z.string().min(8), z.literal("")]) });
 const employeeIdSchema = z.object({ userId: z.string().uuid() });
 
@@ -31,7 +31,7 @@ async function requireEmployeeInCompany(userId: string, companyId: string) {
 export const listEmployees = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const companyId = await requireCompanyAdmin(context);
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: profiles, error } = await supabaseAdmin.from("profiles").select("user_id, full_name, job_title").eq("company_id", companyId).neq("user_id", context.userId);
+  const { data: profiles, error } = await supabaseAdmin.from("profiles").select("user_id, full_name, job_title, work_start, work_end, break_minutes").eq("company_id", companyId).neq("user_id", context.userId);
   if (error) throw new Error("Não foi possível carregar os funcionários.");
   const employees = await Promise.all((profiles ?? []).map(async (profile) => {
     const [{ data: role }, { data: authUser }] = await Promise.all([
@@ -48,7 +48,8 @@ export const createEmployee = createServerFn({ method: "POST" }).middleware([req
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: data.password, email_confirm: true, user_metadata: { full_name: data.fullName } });
   if (createError || !created.user) throw new Error(createError?.message ?? "Não foi possível criar o acesso.");
-  const { error: updateError } = await supabaseAdmin.from("profiles").update({ company_id: companyId, full_name: data.fullName, job_title: data.jobTitle }).eq("user_id", created.user.id);
+  const hasCustomSchedule = Boolean(data.workStart || data.workEnd);
+  const { error: updateError } = await supabaseAdmin.from("profiles").update({ company_id: companyId, full_name: data.fullName, job_title: data.jobTitle, work_start: data.workStart || null, work_end: data.workEnd || null, break_minutes: hasCustomSchedule ? data.breakMinutes : null }).eq("user_id", created.user.id);
   if (updateError) { await supabaseAdmin.auth.admin.deleteUser(created.user.id); throw new Error("Não foi possível vincular o funcionário à empresa."); }
   const { error: roleError } = await supabaseAdmin.from("user_roles").insert({ user_id: created.user.id, role: "employee" });
   if (roleError) { await supabaseAdmin.auth.admin.deleteUser(created.user.id); throw new Error("Não foi possível atribuir o acesso de funcionário."); }
@@ -62,7 +63,8 @@ export const updateEmployee = createServerFn({ method: "POST" }).middleware([req
   if (data.password) authChanges.password = data.password;
   const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(data.userId, authChanges);
   if (authError) throw new Error(authError.message);
-  const { error: profileError } = await supabaseAdmin.from("profiles").update({ full_name: data.fullName, job_title: data.jobTitle }).eq("user_id", data.userId).eq("company_id", companyId);
+  const hasCustomSchedule = Boolean(data.workStart || data.workEnd);
+  const { error: profileError } = await supabaseAdmin.from("profiles").update({ full_name: data.fullName, job_title: data.jobTitle, work_start: data.workStart || null, work_end: data.workEnd || null, break_minutes: hasCustomSchedule ? data.breakMinutes : null }).eq("user_id", data.userId).eq("company_id", companyId);
   if (profileError) throw new Error("O acesso foi atualizado, mas o perfil não pôde ser salvo.");
   return { success: true };
 });

@@ -56,6 +56,9 @@ export type Database = {
           created_at: string
           full_name: string
           job_title: string
+          break_minutes: number | null
+          work_end: string | null
+          work_start: string | null
           updated_at: string
           user_id: string
         }
@@ -64,6 +67,9 @@ export type Database = {
           created_at?: string
           full_name?: string
           job_title?: string
+          break_minutes?: number | null
+          work_end?: string | null
+          work_start?: string | null
           updated_at?: string
           user_id: string
         }
@@ -72,6 +78,9 @@ export type Database = {
           created_at?: string
           full_name?: string
           job_title?: string
+          break_minutes?: number | null
+          work_end?: string | null
+          work_start?: string | null
           updated_at?: string
           user_id?: string
         }

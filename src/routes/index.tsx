@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, BarChart3, Building2, CalendarDays, Check, ChevronRight, Clock3, LogOut, Pencil, Plus, ShieldCheck, Smartphone, Trash2, Users, X } from "lucide-react";
+import { ArrowRight, BarChart3, Building2, CalendarDays, Check, ChevronRight, Clock3, Copy, Link2, LogOut, Pencil, Plus, ShieldCheck, Smartphone, Trash2, Users, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,10 @@ import { lovable } from "@/integrations/lovable";
 import { createEmployee, deleteEmployee, listEmployees, updateEmployee } from "@/lib/employees.functions";
 
 type SessionUser = { id: string; email: string | undefined };
-type Profile = { user_id: string; company_id: string | null; full_name: string; job_title: string };
+type Profile = { user_id: string; company_id: string | null; full_name: string; job_title: string; work_start: string | null; work_end: string | null; break_minutes: number | null };
 type Company = { id: string; name: string; workday_minutes: number; work_start: string; work_end: string; break_minutes: number };
 type Entry = { id: string; user_id: string; event_type: "clock_in" | "clock_out"; recorded_at: string };
-type Member = { user_id: string; full_name: string; job_title: string; email?: string };
+type Member = { user_id: string; full_name: string; job_title: string; email?: string; work_start?: string | null; work_end?: string | null; break_minutes?: number | null };
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -44,7 +44,7 @@ function Index() {
   const loadWorkspace = useCallback(async (currentUser: SessionUser) => {
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("user_id, company_id, full_name, job_title")
+      .select("user_id, company_id, full_name, job_title, work_start, work_end, break_minutes")
       .eq("user_id", currentUser.id)
       .maybeSingle();
     const nextProfile = profileData as Profile | null;
@@ -58,7 +58,7 @@ function Index() {
       supabase.from("companies").select("id, name, workday_minutes, work_start, work_end, break_minutes").eq("id", nextProfile.company_id).single(),
       supabase.from("time_entries").select("id, user_id, event_type, recorded_at").eq("company_id", nextProfile.company_id).order("recorded_at", { ascending: false }).limit(1000),
       supabase.from("user_roles").select("role").eq("user_id", currentUser.id).eq("role", "admin").maybeSingle(),
-      supabase.from("profiles").select("user_id, full_name, job_title").eq("company_id", nextProfile.company_id),
+      supabase.from("profiles").select("user_id, full_name, job_title, work_start, work_end, break_minutes").eq("company_id", nextProfile.company_id),
     ]);
     setCompany(companyData as Company | null);
     setEntries((entryData ?? []) as Entry[]);
@@ -91,7 +91,8 @@ function Index() {
   const todayEntries = entries.filter((entry) => entry.user_id === user.id && new Date(entry.recorded_at).toDateString() === clock.toDateString()).reverse();
   const isWorking = todayEntries.length % 2 === 1;
   const minutesToday = calculateWorkedMinutes(todayEntries, clock);
-  const extraMinutes = calculateExtraMinutes(entries.filter((entry) => entry.user_id === user.id), company.workday_minutes);
+  const scheduledMinutes = scheduleMinutes(profile.work_start, profile.work_end, profile.break_minutes, company);
+  const extraMinutes = calculateExtraMinutes(entries.filter((entry) => entry.user_id === user.id), scheduledMinutes);
   const firstEntry = todayEntries.find((entry) => entry.event_type === "clock_in");
 
   async function registerPoint() {
@@ -120,8 +121,8 @@ function Index() {
 
   return (
     <AppBackdrop>
-      <div className="relative mx-auto min-h-screen max-w-6xl px-5 py-6 lg:px-10 lg:py-8">
-        <header className="flex items-center justify-between">
+      <div className="relative mx-auto min-h-screen max-w-7xl px-5 py-6 lg:px-8 lg:py-7">
+        <header className="flex items-center justify-between border-b border-black/[.07] pb-5">
           <Brand />
           <nav className="flex items-center gap-2 sm:gap-5 text-sm font-medium text-muted-foreground">
             {isAdmin && <Button variant="ghost" onClick={() => setShowTeam(true)}><Users /> <span className="hidden sm:inline">Equipe</span></Button>}
@@ -130,10 +131,10 @@ function Index() {
           </nav>
         </header>
 
-        <main className="mt-9 grid items-stretch gap-6 lg:mt-14 lg:grid-cols-12">
+        <main className="mt-10 grid items-stretch gap-6 lg:mt-14 lg:grid-cols-12">
           <section className="flex flex-col justify-center lg:col-span-5">
-            <div className="inline-flex items-center gap-2 self-start rounded-full border border-glass-border bg-glass px-3 py-1.5 text-xs font-semibold text-primary">
-              <span className="status-pulse size-1.5 rounded-full bg-primary" />
+            <div className="inline-flex items-center gap-2 self-start rounded-full border border-[#0066cc]/15 bg-[#eaf3ff] px-3 py-1.5 text-xs font-semibold text-[#0066cc]">
+              <span className="status-pulse size-1.5 rounded-full bg-[#0066cc]" />
               {formatLongDate(clock)}
             </div>
             <h1 className="mt-5 font-display text-5xl font-black leading-[0.92] sm:text-6xl">
@@ -143,19 +144,19 @@ function Index() {
               {isWorking ? <>Você está em turno há <strong className="text-primary">{formatDuration(minutesToday)}</strong>.</> : "Seu ponto está pronto para começar."} A Simbi calcula seu saldo automaticamente.
             </p>
 
-            <div className="glass-panel mt-8 rotate-[-1deg] rounded-2xl p-6">
+            <div className="glass-panel mt-8 rounded-[28px] p-6">
               <div className="flex items-end justify-between gap-4">
                 <div><Label>Horas hoje</Label><div className="font-display text-5xl font-black tabular-nums">{formatClock(minutesToday)}</div></div>
                 <div className="text-right"><Label>Agora</Label><div className="text-lg font-bold tabular-nums">{clock.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div></div>
               </div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-glass"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (minutesToday / company.workday_minutes) * 100)}%` }} /></div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-glass"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (minutesToday / scheduledMinutes) * 100)}%` }} /></div>
               <Button variant="kinetic" size="punch" className="mt-5 w-full" onClick={registerPoint}>{isWorking ? "Registrar saída" : "Registrar entrada"}</Button>
               {message && <p className="mt-3 text-center text-xs text-primary" role="status">{message}</p>}
             </div>
           </section>
 
           <section className="grid gap-6 sm:grid-cols-2 lg:col-span-7">
-            <div className="glass-panel flex flex-col rounded-2xl p-6 sm:rotate-[1deg]">
+            <div className="glass-panel flex flex-col rounded-[28px] p-6">
               <div className="flex items-center justify-between"><Label>Registros de hoje</Label><span className="text-xs font-bold text-primary">{todayEntries.length} marcações</span></div>
               <div className="mt-5 space-y-3">
                 {todayEntries.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Nenhum registro hoje.</p>}
@@ -167,7 +168,7 @@ function Index() {
               </div>
             </div>
 
-            <div className="glass-panel flex flex-col rounded-2xl p-6 sm:rotate-[-1deg]">
+            <div className="glass-panel flex flex-col rounded-[28px] p-6">
               <div className="flex items-center justify-between"><Label>Horas extras</Label><span className="text-xs font-bold text-primary">{formatSigned(extraMinutes)}</span></div>
               <div className="mt-5 flex h-24 items-end gap-1.5">{hourBars.map((height, index) => <div key={index} className={index > 1 ? "flex-1 rounded-t-md bg-primary" : "flex-1 rounded-t-md bg-glass"} style={{ height: `${height}%` }} />)}</div>
               <div className="mt-3 flex justify-between text-[10px] uppercase text-muted-foreground"><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span></div>
@@ -178,7 +179,7 @@ function Index() {
 
         <section className="mt-8 grid gap-6 sm:grid-cols-3">
           <Summary icon={<Building2 />} label="Empresa" value={company.name} detail={`${members.length} ${members.length === 1 ? "pessoa cadastrada" : "pessoas cadastradas"}`} />
-          <Summary icon={<Clock3 />} label="Expediente" value={`${company.work_start.slice(0, 5)} – ${company.work_end.slice(0, 5)}`} detail={`${company.break_minutes / 60}h de intervalo`} tilt="sm:rotate-[-0.6deg]" />
+          <Summary icon={<Clock3 />} label="Meu expediente" value={`${(profile.work_start ?? company.work_start).slice(0, 5)} – ${(profile.work_end ?? company.work_end).slice(0, 5)}`} detail={`${(profile.break_minutes ?? company.break_minutes) / 60}h de intervalo`} tilt="sm:rotate-[-0.6deg]" />
           <Summary icon={<Users />} label="Meu saldo" value={formatSigned(extraMinutes)} detail="horas extras acumuladas" tilt="sm:rotate-[0.6deg]" />
         </section>
       </div>
@@ -188,17 +189,18 @@ function Index() {
 }
 
 function CompanyDashboard({ company, members, entries, clock, onSignOut, onCreated }: { company: Company; members: Member[]; entries: Entry[]; clock: Date; onSignOut: () => void; onCreated: () => void }) {
-  const [showTeam, setShowTeam] = useState(false);
+  const [showTeam, setShowTeam] = useState(false); const [copied, setCopied] = useState(false);
   const today = entries.filter((entry) => new Date(entry.recorded_at).toDateString() === clock.toDateString());
   const working = members.filter((member) => today.filter((entry) => entry.user_id === member.user_id).length % 2 === 1);
   const totalToday = members.reduce((sum, member) => sum + calculateWorkedMinutes(today.filter((entry) => entry.user_id === member.user_id).reverse(), clock), 0);
-  return <AppBackdrop><div className="relative mx-auto min-h-screen max-w-6xl px-5 py-6 lg:px-10 lg:py-8">
-    <header className="flex items-center justify-between"><Brand /><div className="flex items-center gap-3"><span className="hidden text-sm text-muted-foreground sm:inline">{company.name}</span><Button variant="ghost" size="icon" onClick={onSignOut} aria-label="Sair"><LogOut /></Button></div></header>
-    <main className="mt-12"><Label>Painel da empresa</Label><div className="mt-3 flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-4xl font-black sm:text-5xl">Sua equipe em tempo real.</h1><p className="mt-2 text-muted-foreground">{formatLongDate(clock)} · {company.name}</p></div><Button variant="kinetic" onClick={() => setShowTeam(true)}><Plus /> Adicionar funcionário</Button></div>
-      <div className="mt-9 grid gap-4 sm:grid-cols-3"><Summary icon={<Users />} label="Funcionários" value={String(members.length)} detail="pessoas cadastradas" /><Summary icon={<Clock3 />} label="Em expediente" value={String(working.length)} detail="com ponto aberto agora" /><Summary icon={<Building2 />} label="Horas registradas hoje" value={formatClock(totalToday)} detail="somadas para toda a equipe" /></div>
-      <section className="glass-panel mt-7 rounded-2xl p-5 sm:p-7"><div className="flex items-center justify-between gap-3"><div><Label>Equipe</Label><h2 className="mt-1 font-display text-2xl font-black">Ponto e horários</h2></div><Button variant="glass" onClick={() => setShowTeam(true)}>Gerenciar equipe</Button></div>
-        {members.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">Cadastre o primeiro funcionário para acompanhar os horários aqui.</p> : <div className="mt-6 space-y-3">{members.map((member) => { const memberToday = today.filter((entry) => entry.user_id === member.user_id); const latest = memberToday[0]; const open = memberToday.length % 2 === 1; const balance = calculateExtraMinutes(entries.filter((entry) => entry.user_id === member.user_id), company.workday_minutes); return <div key={member.user_id} className="grid gap-3 rounded-xl border border-glass-border bg-glass p-4 sm:grid-cols-[1.5fr_1fr_1fr_1fr] sm:items-center"><div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-full bg-primary/20 text-xs font-black text-primary">{initials(member.full_name)}</div><div><p className="font-bold">{member.full_name}</p><p className="text-xs text-muted-foreground">{member.job_title || "Funcionário"}</p></div></div><div><Label>Situação</Label><p className={open ? "font-semibold text-primary" : "font-semibold text-muted-foreground"}>{open ? "Em expediente" : "Fora do expediente"}</p></div><div><Label>Último registro</Label><p className="font-semibold">{latest ? `${latest.event_type === "clock_in" ? "Entrada" : "Saída"} · ${formatTime(latest.recorded_at)}` : "Sem registro hoje"}</p></div><div><Label>Hoje · saldo</Label><p className="font-semibold tabular-nums">{formatClock(calculateWorkedMinutes([...memberToday].reverse(), clock))} · {formatSigned(balance)}</p></div></div>; })}</div>}
-      </section>
+  const accessLink = window.location.origin;
+  async function copyAccessLink() { await navigator.clipboard.writeText(accessLink); setCopied(true); window.setTimeout(() => setCopied(false), 2500); }
+  return <AppBackdrop><div className="relative mx-auto min-h-screen max-w-7xl px-5 py-6 lg:px-8 lg:py-7">
+    <header className="flex items-center justify-between border-b border-black/[.07] pb-5"><Brand /><div className="flex items-center gap-3"><span className="hidden text-sm text-muted-foreground sm:inline">{company.name}</span><Button variant="ghost" size="icon" onClick={onSignOut} aria-label="Sair"><LogOut /></Button></div></header>
+    <main className="py-10 lg:py-14"><div className="flex flex-wrap items-end justify-between gap-5"><div><p className="text-sm font-semibold text-[#0066cc]">PAINEL DA EMPRESA</p><h1 className="mt-3 font-display text-4xl font-black tracking-[-.045em] sm:text-6xl">Sua equipe em tempo real.</h1><p className="mt-3 text-muted-foreground">{formatLongDate(clock)} · {company.name}</p></div><Button variant="kinetic" onClick={() => setShowTeam(true)}><Plus /> Adicionar funcionário</Button></div>
+      <div className="mt-10 grid gap-4 sm:grid-cols-3"><Summary icon={<Users />} label="Funcionários" value={String(members.length)} detail="pessoas cadastradas" /><Summary icon={<Clock3 />} label="Em expediente" value={String(working.length)} detail="com ponto aberto agora" /><Summary icon={<Building2 />} label="Horas registradas hoje" value={formatClock(totalToday)} detail="somadas para toda a equipe" /></div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.45fr_.75fr]"><section className="glass-panel rounded-[28px] p-5 sm:p-7"><div className="flex items-center justify-between gap-3"><div><Label>Equipe</Label><h2 className="mt-2 font-display text-2xl font-black tracking-tight">Ponto e horários</h2></div><Button variant="glass" onClick={() => setShowTeam(true)}>Gerenciar</Button></div>{members.length === 0 ? <p className="py-16 text-center text-sm text-muted-foreground">Cadastre o primeiro funcionário para acompanhar os horários aqui.</p> : <div className="mt-6 space-y-2">{members.map((member) => { const memberToday = today.filter((entry) => entry.user_id === member.user_id); const latest = memberToday[0]; const open = memberToday.length % 2 === 1; const target = scheduleMinutes(member.work_start, member.work_end, member.break_minutes, company); const balance = calculateExtraMinutes(entries.filter((entry) => entry.user_id === member.user_id), target); const start = (member.work_start ?? company.work_start).slice(0, 5); const now = clock.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); const late = !open && memberToday.length === 0 && now > start; return <div key={member.user_id} className="grid gap-3 rounded-2xl border border-black/[.06] bg-white p-4 sm:grid-cols-[1.45fr_1fr_1fr_1fr] sm:items-center"><div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-full bg-[#eaf3ff] text-xs font-black text-[#0066cc]">{initials(member.full_name)}</div><div><p className="font-bold">{member.full_name}</p><p className="text-xs text-muted-foreground">{member.job_title || "Funcionário"} · {start}–{(member.work_end ?? company.work_end).slice(0, 5)}</p></div></div><div><Label>Situação</Label><p className={open ? "font-semibold text-[#15704a]" : late ? "font-semibold text-[#d97706]" : "font-semibold text-muted-foreground"}>{open ? "Em expediente" : late ? "Sem entrada" : "Fora do expediente"}</p></div><div><Label>Último registro</Label><p className="font-semibold">{latest ? `${latest.event_type === "clock_in" ? "Entrada" : "Saída"} · ${formatTime(latest.recorded_at)}` : late ? "Alerta: atraso" : "Sem registro hoje"}</p></div><div><Label>Hoje · saldo</Label><p className="font-semibold tabular-nums">{formatClock(calculateWorkedMinutes([...memberToday].reverse(), clock))} · {formatSigned(balance)}</p></div></div>; })}</div>}</section>
+        <aside className="space-y-6"><section className="rounded-[28px] bg-[#1d1d1f] p-6 text-white"><Link2 className="size-6 text-[#2997ff]" /><p className="mt-8 text-sm font-semibold text-white/55">ACESSO DA EQUIPE</p><h2 className="mt-2 text-2xl font-semibold tracking-tight">Um link para entrar na Simbi.</h2><p className="mt-3 text-sm leading-relaxed text-white/60">Compartilhe com funcionários já cadastrados. Cada pessoa entra usando seu próprio e-mail e senha.</p><div className="mt-6 overflow-hidden rounded-xl bg-white/10 px-3 py-3 text-xs text-white/70">{accessLink}</div><button className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-sm font-semibold text-[#1d1d1f]" onClick={copyAccessLink}><Copy className="size-4" />{copied ? "Link copiado" : "Copiar link de acesso"}</button></section><section className="glass-panel rounded-[28px] p-6"><Label>Resumo do dia</Label><div className="mt-6 flex h-24 items-end gap-2">{[42, 66, 52, 85, 74, 92, 68].map((height, index) => <div key={index} className="flex-1 rounded-t-md bg-[#0071e3]" style={{ height: `${height}%`, opacity: .35 + index / 15 }} />)}</div><div className="mt-4 flex justify-between text-[10px] text-muted-foreground"><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span></div><p className="mt-6 border-t border-black/[.08] pt-5 text-sm text-muted-foreground">Acompanhe as horas registradas e intervenha antes do fechamento.</p></section></aside></div>
     </main></div>{showTeam && <TeamDialog members={members} onClose={() => setShowTeam(false)} onCreated={onCreated} />}</AppBackdrop>;
 }
 
@@ -313,10 +315,11 @@ function TeamDialog({ members, onClose, onCreated }: { members: Member[]; onClos
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const [team, setTeam] = useState<Member[]>(members); const [editing, setEditing] = useState<Member | null>(null);
   const refresh = useCallback(async () => { const result = await listEmployeesFn(); setTeam(result as Member[]); }, [listEmployeesFn]);
   useEffect(() => { refresh().catch(() => setMessage("Não foi possível carregar os e-mails da equipe.")); }, [refresh]);
-  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setMessage(""); const form = new FormData(event.currentTarget); try { await createEmployeeFn({ data: { fullName: String(form.get("fullName")), jobTitle: String(form.get("jobTitle")), email: String(form.get("email")), password: String(form.get("password")) } }); setMessage("Funcionário cadastrado com sucesso. Ele já pode entrar com o e-mail e a senha inicial."); event.currentTarget.reset(); await refresh(); onCreated(); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível cadastrar o funcionário."); } setBusy(false); }
-  async function saveEdit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!editing) return; setBusy(true); setMessage(""); const form = new FormData(event.currentTarget); try { await updateEmployeeFn({ data: { userId: editing.user_id, fullName: String(form.get("fullName")), jobTitle: String(form.get("jobTitle")), email: String(form.get("email")), password: String(form.get("password")) } }); setMessage("Dados do funcionário atualizados."); setEditing(null); await refresh(); onCreated(); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível atualizar o funcionário."); } setBusy(false); }
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setMessage(""); const form = new FormData(event.currentTarget); try { await createEmployeeFn({ data: { fullName: String(form.get("fullName")), jobTitle: String(form.get("jobTitle")), email: String(form.get("email")), password: String(form.get("password")), workStart: String(form.get("workStart")), workEnd: String(form.get("workEnd")), breakMinutes: Number(form.get("breakMinutes")) } }); setMessage("Funcionário cadastrado com sucesso. Ele já pode entrar com o e-mail e a senha inicial."); event.currentTarget.reset(); await refresh(); onCreated(); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível cadastrar o funcionário."); } setBusy(false); }
+  async function saveEdit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!editing) return; setBusy(true); setMessage(""); const form = new FormData(event.currentTarget); try { await updateEmployeeFn({ data: { userId: editing.user_id, fullName: String(form.get("fullName")), jobTitle: String(form.get("jobTitle")), email: String(form.get("email")), password: String(form.get("password")), workStart: String(form.get("workStart")), workEnd: String(form.get("workEnd")), breakMinutes: Number(form.get("breakMinutes")) } }); setMessage("Dados do funcionário atualizados."); setEditing(null); await refresh(); onCreated(); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível atualizar o funcionário."); } setBusy(false); }
   async function remove(member: Member) { if (!window.confirm(`Apagar ${member.full_name}? O acesso e todos os registros de ponto dessa pessoa serão excluídos.`)) return; setBusy(true); setMessage(""); try { await deleteEmployeeFn({ data: { userId: member.user_id } }); setMessage("Funcionário apagado com sucesso."); if (editing?.user_id === member.user_id) setEditing(null); await refresh(); onCreated(); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível apagar o funcionário."); } setBusy(false); }
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4 backdrop-blur-md"><section className="glass-panel max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl p-6"><div className="flex items-start justify-between"><div><Label>Equipe</Label><h2 className="mt-1 font-display text-3xl font-black">Pessoas e acessos</h2></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar"><X /></Button></div><div className="mt-6 grid gap-7 md:grid-cols-2"><div><h3 className="font-bold">Cadastrados</h3><div className="mt-3 space-y-2">{team.length === 0 && <p className="rounded-xl bg-glass p-4 text-sm text-muted-foreground">Nenhum funcionário cadastrado.</p>}{team.map((member) => <div key={member.user_id} className="flex items-center gap-3 rounded-xl bg-glass p-3"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/20 text-xs font-black text-primary">{initials(member.full_name)}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{member.full_name || "Sem nome"}</p><p className="truncate text-xs text-muted-foreground">{member.job_title || "Funcionário"}{member.email ? ` · ${member.email}` : ""}</p></div><Button variant="ghost" size="icon" aria-label={`Editar ${member.full_name}`} onClick={() => { setEditing(member); setMessage(""); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" aria-label={`Apagar ${member.full_name}`} disabled={busy} onClick={() => remove(member)}><Trash2 className="size-4 text-warning" /></Button></div>)}</div></div>{editing ? <form key={editing.user_id} onSubmit={saveEdit} className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Editar funcionário</h3><Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button></div><Field label="Nome" name="fullName" defaultValue={editing.full_name} /><Field label="Cargo" name="jobTitle" defaultValue={editing.job_title} /><Field label="E-mail de acesso" name="email" type="email" defaultValue={editing.email} /><label className="block text-xs font-semibold text-muted-foreground">Nova senha (opcional)<Input className="mt-1.5 h-11 border-glass-border bg-glass" name="password" type="password" minLength={8} placeholder="Deixe em branco para manter" /></label><Button variant="kinetic" className="w-full" disabled={busy}>{busy ? "Salvando..." : "Salvar alterações"}</Button></form> : <form onSubmit={submit} className="space-y-3"><h3 className="font-bold">Novo funcionário</h3><Field label="Nome" name="fullName" /><Field label="Cargo" name="jobTitle" /><Field label="E-mail de acesso" name="email" type="email" /><Field label="Senha inicial" name="password" type="password" minLength={8} /><Button variant="kinetic" className="w-full" disabled={busy}><Plus />{busy ? "Cadastrando..." : "Cadastrar funcionário"}</Button></form>}</div>{message && <p className="mt-5 text-sm text-primary" role="status">{message}</p>}</section></div>;
+  const scheduleFields = (member?: Member) => <div className="rounded-2xl border border-black/[.07] bg-[#f5f5f7] p-4"><p className="text-xs font-semibold text-[#0066cc]">JORNADA INDIVIDUAL</p><p className="mt-1 text-xs text-muted-foreground">Deixe os horários em branco para usar o padrão da empresa.</p><div className="mt-4 grid grid-cols-2 gap-3"><label className="text-xs font-semibold text-muted-foreground">Entrada<Input className="mt-1.5 h-10 border-black/10 bg-white" name="workStart" type="time" defaultValue={member?.work_start?.slice(0, 5) ?? ""} /></label><label className="text-xs font-semibold text-muted-foreground">Saída<Input className="mt-1.5 h-10 border-black/10 bg-white" name="workEnd" type="time" defaultValue={member?.work_end?.slice(0, 5) ?? ""} /></label></div><label className="mt-3 block text-xs font-semibold text-muted-foreground">Intervalo (minutos)<Input className="mt-1.5 h-10 border-black/10 bg-white" name="breakMinutes" type="number" min="0" max="480" defaultValue={member?.break_minutes ?? 60} /></label></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4 backdrop-blur-md"><section className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-[28px] bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><Label>Equipe</Label><h2 className="mt-2 font-display text-3xl font-black tracking-tight">Pessoas, acessos e jornadas</h2></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar"><X /></Button></div><div className="mt-6 grid gap-8 md:grid-cols-2"><div><h3 className="font-bold">Cadastrados</h3><div className="mt-3 space-y-2">{team.length === 0 && <p className="rounded-xl bg-[#f5f5f7] p-4 text-sm text-muted-foreground">Nenhum funcionário cadastrado.</p>}{team.map((member) => <div key={member.user_id} className="flex items-center gap-3 rounded-2xl bg-[#f5f5f7] p-3"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-[#eaf3ff] text-xs font-black text-[#0066cc]">{initials(member.full_name)}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{member.full_name || "Sem nome"}</p><p className="truncate text-xs text-muted-foreground">{member.job_title || "Funcionário"} · {member.work_start?.slice(0, 5) ?? "Padrão"}{member.work_end ? `–${member.work_end.slice(0, 5)}` : ""}</p></div><Button variant="ghost" size="icon" aria-label={`Editar ${member.full_name}`} onClick={() => { setEditing(member); setMessage(""); }}><Pencil className="size-4" /></Button><Button variant="ghost" size="icon" aria-label={`Apagar ${member.full_name}`} disabled={busy} onClick={() => remove(member)}><Trash2 className="size-4 text-warning" /></Button></div>)}</div></div>{editing ? <form key={editing.user_id} onSubmit={saveEdit} className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Editar funcionário</h3><Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button></div><Field label="Nome" name="fullName" defaultValue={editing.full_name} /><Field label="Cargo" name="jobTitle" defaultValue={editing.job_title} /><Field label="E-mail de acesso" name="email" type="email" defaultValue={editing.email} />{scheduleFields(editing)}<label className="block text-xs font-semibold text-muted-foreground">Nova senha (opcional)<Input className="mt-1.5 h-11 border-black/10 bg-white" name="password" type="password" minLength={8} placeholder="Deixe em branco para manter" /></label><Button variant="kinetic" className="w-full" disabled={busy}>{busy ? "Salvando..." : "Salvar alterações"}</Button></form> : <form onSubmit={submit} className="space-y-3"><h3 className="font-bold">Novo funcionário</h3><Field label="Nome" name="fullName" /><Field label="Cargo" name="jobTitle" /><Field label="E-mail de acesso" name="email" type="email" />{scheduleFields()}<Field label="Senha inicial" name="password" type="password" minLength={8} /><Button variant="kinetic" className="w-full" disabled={busy}><Plus />{busy ? "Cadastrando..." : "Cadastrar funcionário"}</Button></form>}</div>{message && <p className="mt-5 text-sm text-[#0066cc]" role="status">{message}</p>}</section></div>;
 }
 
 function Metric({ target, suffix, label }: { target: number; suffix: string; label: string }) {
@@ -343,5 +346,6 @@ function formatTime(value: string) { return new Date(value).toLocaleTimeString("
 function formatClock(minutes: number) { const safe = Math.max(0, Math.floor(minutes)); return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`; }
 function formatDuration(minutes: number) { return `${Math.floor(minutes / 60)}h ${Math.floor(minutes % 60)}min`; }
 function formatSigned(minutes: number) { const sign = minutes >= 0 ? "+" : "−"; return `${sign}${Math.floor(Math.abs(minutes) / 60)}h ${Math.abs(Math.floor(minutes)) % 60}m`; }
+function scheduleMinutes(workStart: string | null | undefined, workEnd: string | null | undefined, breakMinutes: number | null | undefined, company: Company) { const start = workStart ?? company.work_start; const end = workEnd ?? company.work_end; const [startHour, startMinute] = start.slice(0, 5).split(":").map(Number); const [endHour, endMinute] = end.slice(0, 5).split(":").map(Number); const difference = (endHour * 60 + endMinute) - (startHour * 60 + startMinute) - (breakMinutes ?? company.break_minutes); return difference > 0 ? difference : company.workday_minutes; }
 function calculateWorkedMinutes(entries: Entry[], now: Date) { let total = 0; let start: Date | null = null; for (const entry of entries) { if (entry.event_type === "clock_in") start = new Date(entry.recorded_at); else if (start) { total += new Date(entry.recorded_at).getTime() - start.getTime(); start = null; } } if (start) total += now.getTime() - start.getTime(); return total / 60000; }
 function calculateExtraMinutes(entries: Entry[], target: number) { const grouped = new Map<string, Entry[]>(); for (const entry of [...entries].reverse()) { const key = new Date(entry.recorded_at).toDateString(); grouped.set(key, [...(grouped.get(key) ?? []), entry]); } let balance = 0; for (const dayEntries of grouped.values()) balance += calculateWorkedMinutes(dayEntries, new Date()) - target; return Math.round(balance); }
