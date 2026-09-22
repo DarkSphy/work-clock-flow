@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, Clock3, LogOut, Plus, Users, X } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -224,7 +224,7 @@ function AuthScreen({ onSignedIn }: { onSignedIn: (user: SessionUser) => void })
     <section className="glass-panel mx-auto w-full max-w-md rounded-2xl p-6 sm:p-8"><h2 className="font-display text-2xl font-black">{mode === "signin" ? "Entrar na Simbi" : "Criar sua empresa"}</h2><p className="mt-1 text-sm text-muted-foreground">{mode === "signin" ? "Use seu acesso para registrar o ponto." : "Comece com seu perfil de administrador."}</p>
       <form className="mt-6 space-y-4" onSubmit={submit}>{mode === "signup" && <Field label="Seu nome" name="fullName" placeholder="Nome completo" />}<Field label="E-mail" name="email" type="email" placeholder="voce@empresa.com" /><Field label="Senha" name="password" type="password" placeholder="Mínimo de 8 caracteres" minLength={8} /><Button variant="kinetic" size="punch" className="w-full" disabled={busy}>{busy ? "Aguarde..." : mode === "signin" ? "Entrar" : "Criar conta"}</Button></form>
       <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-glass-border" />ou<span className="h-px flex-1 bg-glass-border" /></div><Button variant="glass" className="h-11 w-full" onClick={googleSignIn} disabled={busy}>Continuar com Google</Button>
-      {notice && <p className="mt-4 text-center text-sm text-primary" role="status">{notice}</p>}<button className="mt-5 w-full text-sm text-muted-foreground hover:text-foreground" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setNotice(""); }}>{mode === "signin" ? "Ainda não tem conta? Criar empresa" : "Já tem conta? Entrar"}</button>
+      {notice && <p className="mt-4 text-center text-sm text-primary" role="status">{notice}</p>}<Button variant="ghost" className="mt-5 w-full text-muted-foreground" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setNotice(""); }}>{mode === "signin" ? "Ainda não tem conta? Criar empresa" : "Já tem conta? Entrar"}</Button>
     </section>
   </div></main></AppBackdrop>;
 }
