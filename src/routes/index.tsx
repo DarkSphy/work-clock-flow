@@ -193,7 +193,7 @@ function CompanyDashboard({ company, members, entries, clock, onSignOut, onCreat
   const today = entries.filter((entry) => new Date(entry.recorded_at).toDateString() === clock.toDateString());
   const working = members.filter((member) => today.filter((entry) => entry.user_id === member.user_id).length % 2 === 1);
   const totalToday = members.reduce((sum, member) => sum + calculateWorkedMinutes(today.filter((entry) => entry.user_id === member.user_id).reverse(), clock), 0);
-  const accessLink = window.location.origin;
+  const accessLink = `${window.location.origin}/?empresa=${encodeURIComponent(company.id)}`;
   async function copyAccessLink() { await navigator.clipboard.writeText(accessLink); setCopied(true); window.setTimeout(() => setCopied(false), 2500); }
   return <AppBackdrop><div className="relative mx-auto min-h-screen max-w-7xl px-5 py-6 lg:px-8 lg:py-7">
     <header className="flex items-center justify-between border-b border-black/[.07] pb-5"><Brand /><div className="flex items-center gap-3"><span className="hidden text-sm text-muted-foreground sm:inline">{company.name}</span><Button variant="ghost" size="icon" onClick={onSignOut} aria-label="Sair"><LogOut /></Button></div></header>
