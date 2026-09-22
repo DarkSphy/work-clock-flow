@@ -12,7 +12,7 @@ import { createEmployee } from "@/lib/employees.functions";
 type SessionUser = { id: string; email: string | undefined };
 type Profile = { user_id: string; company_id: string | null; full_name: string; job_title: string };
 type Company = { id: string; name: string; workday_minutes: number; work_start: string; work_end: string; break_minutes: number };
-type Entry = { id: string; event_type: "clock_in" | "clock_out"; recorded_at: string };
+type Entry = { id: string; user_id: string; event_type: "clock_in" | "clock_out"; recorded_at: string };
 type Member = { user_id: string; full_name: string; job_title: string };
 
 export const Route = createFileRoute("/")({
@@ -56,7 +56,7 @@ function Index() {
 
     const [{ data: companyData }, { data: entryData }, { data: roleData }, { data: memberData }] = await Promise.all([
       supabase.from("companies").select("id, name, workday_minutes, work_start, work_end, break_minutes").eq("id", nextProfile.company_id).single(),
-      supabase.from("time_entries").select("id, event_type, recorded_at").eq("user_id", currentUser.id).order("recorded_at", { ascending: false }).limit(90),
+      supabase.from("time_entries").select("id, user_id, event_type, recorded_at").eq("company_id", nextProfile.company_id).order("recorded_at", { ascending: false }).limit(1000),
       supabase.from("user_roles").select("role").eq("user_id", currentUser.id).eq("role", "admin").maybeSingle(),
       supabase.from("profiles").select("user_id, full_name, job_title").eq("company_id", nextProfile.company_id),
     ]);
@@ -86,14 +86,16 @@ function Index() {
   if (!profile?.company_id) return <Onboarding user={user} profile={profile} onDone={() => loadWorkspace(user)} />;
   if (!company) return <AppBackdrop><p>Não foi possível carregar a empresa.</p></AppBackdrop>;
 
-  const todayEntries = entries.filter((entry) => new Date(entry.recorded_at).toDateString() === clock.toDateString()).reverse();
+  if (isAdmin) return <CompanyDashboard company={company} members={members.filter((member) => member.user_id !== user.id)} entries={entries} clock={clock} onSignOut={signOut} onCreated={() => loadWorkspace(user)} />;
+
+  const todayEntries = entries.filter((entry) => entry.user_id === user.id && new Date(entry.recorded_at).toDateString() === clock.toDateString()).reverse();
   const isWorking = todayEntries.length % 2 === 1;
   const minutesToday = calculateWorkedMinutes(todayEntries, clock);
-  const extraMinutes = calculateExtraMinutes(entries, company.workday_minutes);
+  const extraMinutes = calculateExtraMinutes(entries.filter((entry) => entry.user_id === user.id), company.workday_minutes);
   const firstEntry = todayEntries.find((entry) => entry.event_type === "clock_in");
 
   async function registerPoint() {
-    if (!user || !company) return;
+    if (!user || !company || isAdmin) return;
     setMessage("");
     const { error } = await supabase.from("time_entries").insert({
       company_id: company.id,
@@ -185,6 +187,21 @@ function Index() {
   );
 }
 
+function CompanyDashboard({ company, members, entries, clock, onSignOut, onCreated }: { company: Company; members: Member[]; entries: Entry[]; clock: Date; onSignOut: () => void; onCreated: () => void }) {
+  const [showTeam, setShowTeam] = useState(false);
+  const today = entries.filter((entry) => new Date(entry.recorded_at).toDateString() === clock.toDateString());
+  const working = members.filter((member) => today.filter((entry) => entry.user_id === member.user_id).length % 2 === 1);
+  const totalToday = members.reduce((sum, member) => sum + calculateWorkedMinutes(today.filter((entry) => entry.user_id === member.user_id).reverse(), clock), 0);
+  return <AppBackdrop><div className="relative mx-auto min-h-screen max-w-6xl px-5 py-6 lg:px-10 lg:py-8">
+    <header className="flex items-center justify-between"><Brand /><div className="flex items-center gap-3"><span className="hidden text-sm text-muted-foreground sm:inline">{company.name}</span><Button variant="ghost" size="icon" onClick={onSignOut} aria-label="Sair"><LogOut /></Button></div></header>
+    <main className="mt-12"><Label>Painel da empresa</Label><div className="mt-3 flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-4xl font-black sm:text-5xl">Sua equipe em tempo real.</h1><p className="mt-2 text-muted-foreground">{formatLongDate(clock)} · {company.name}</p></div><Button variant="kinetic" onClick={() => setShowTeam(true)}><Plus /> Adicionar funcionário</Button></div>
+      <div className="mt-9 grid gap-4 sm:grid-cols-3"><Summary icon={<Users />} label="Funcionários" value={String(members.length)} detail="pessoas cadastradas" /><Summary icon={<Clock3 />} label="Em expediente" value={String(working.length)} detail="com ponto aberto agora" /><Summary icon={<Building2 />} label="Horas registradas hoje" value={formatClock(totalToday)} detail="somadas para toda a equipe" /></div>
+      <section className="glass-panel mt-7 rounded-2xl p-5 sm:p-7"><div className="flex items-center justify-between gap-3"><div><Label>Equipe</Label><h2 className="mt-1 font-display text-2xl font-black">Ponto e horários</h2></div><Button variant="glass" onClick={() => setShowTeam(true)}>Gerenciar equipe</Button></div>
+        {members.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">Cadastre o primeiro funcionário para acompanhar os horários aqui.</p> : <div className="mt-6 space-y-3">{members.map((member) => { const memberToday = today.filter((entry) => entry.user_id === member.user_id); const latest = memberToday[0]; const open = memberToday.length % 2 === 1; const balance = calculateExtraMinutes(entries.filter((entry) => entry.user_id === member.user_id), company.workday_minutes); return <div key={member.user_id} className="grid gap-3 rounded-xl border border-glass-border bg-glass p-4 sm:grid-cols-[1.5fr_1fr_1fr_1fr] sm:items-center"><div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-full bg-primary/20 text-xs font-black text-primary">{initials(member.full_name)}</div><div><p className="font-bold">{member.full_name}</p><p className="text-xs text-muted-foreground">{member.job_title || "Funcionário"}</p></div></div><div><Label>Situação</Label><p className={open ? "font-semibold text-primary" : "font-semibold text-muted-foreground"}>{open ? "Em expediente" : "Fora do expediente"}</p></div><div><Label>Último registro</Label><p className="font-semibold">{latest ? `${latest.event_type === "clock_in" ? "Entrada" : "Saída"} · ${formatTime(latest.recorded_at)}` : "Sem registro hoje"}</p></div><div><Label>Hoje · saldo</Label><p className="font-semibold tabular-nums">{formatClock(calculateWorkedMinutes([...memberToday].reverse(), clock))} · {formatSigned(balance)}</p></div></div>; })}</div>}
+      </section>
+    </main></div>{showTeam && <TeamDialog members={members} onClose={() => setShowTeam(false)} onCreated={onCreated} />}</AppBackdrop>;
+}
+
 function AuthScreen({ onSignedIn }: { onSignedIn: (user: SessionUser) => void }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [busy, setBusy] = useState(false);
@@ -244,7 +261,7 @@ function Onboarding({ user, profile, onDone }: { user: SessionUser; profile: Pro
 
 function TeamDialog({ members, onClose, onCreated }: { members: Member[]; onClose: () => void; onCreated: () => void }) {
   const createEmployeeFn = useServerFn(createEmployee); const [busy, setBusy] = useState(false); const [message, setMessage] = useState("");
-  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setMessage(""); const form = new FormData(event.currentTarget); try { await createEmployeeFn({ data: { fullName: String(form.get("fullName")), jobTitle: String(form.get("jobTitle")), email: String(form.get("email")), password: String(form.get("password")) } }); setMessage("Funcionário cadastrado com sucesso."); event.currentTarget.reset(); onCreated(); } catch { setMessage("Não foi possível cadastrar. Confira o e-mail e tente novamente."); } setBusy(false); }
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setMessage(""); const form = new FormData(event.currentTarget); try { await createEmployeeFn({ data: { fullName: String(form.get("fullName")), jobTitle: String(form.get("jobTitle")), email: String(form.get("email")), password: String(form.get("password")) } }); setMessage("Funcionário cadastrado com sucesso. Ele já pode entrar com o e-mail e a senha inicial."); event.currentTarget.reset(); onCreated(); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível cadastrar o funcionário."); } setBusy(false); }
   return <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4 backdrop-blur-md"><section className="glass-panel max-h-[90vh] w-full max-w-4xl overflow-auto rounded-2xl p-6"><div className="flex items-start justify-between"><div><Label>Equipe</Label><h2 className="mt-1 font-display text-3xl font-black">Pessoas e acessos</h2></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar"><X /></Button></div><div className="mt-6 grid gap-7 md:grid-cols-2"><div><h3 className="font-bold">Cadastrados</h3><div className="mt-3 space-y-2">{members.map((member) => <div key={member.user_id} className="flex items-center gap-3 rounded-xl bg-glass p-3"><div className="grid size-9 place-items-center rounded-full bg-primary/20 text-xs font-black text-primary">{initials(member.full_name)}</div><div><p className="text-sm font-bold">{member.full_name || "Sem nome"}</p><p className="text-xs text-muted-foreground">{member.job_title || "Funcionário"}</p></div></div>)}</div></div><form onSubmit={submit} className="space-y-3"><h3 className="font-bold">Novo funcionário</h3><Field label="Nome" name="fullName" /><Field label="Cargo" name="jobTitle" /><Field label="E-mail de acesso" name="email" type="email" /><Field label="Senha inicial" name="password" type="password" minLength={8} /><Button variant="kinetic" className="w-full" disabled={busy}><Plus />{busy ? "Cadastrando..." : "Cadastrar funcionário"}</Button>{message && <p className="text-sm text-primary" role="status">{message}</p>}</form></div></section></div>;
 }
 

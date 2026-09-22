@@ -55,6 +55,9 @@ export const createEmployee = createServerFn({ method: "POST" })
       .from("user_roles")
       .insert({ user_id: created.user.id, role: "employee" });
 
-    if (employeeRoleError) throw new Error("O acesso foi criado, mas a função não pôde ser atribuída.");
+    if (employeeRoleError) {
+      await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+      throw new Error("Não foi possível atribuir o acesso de funcionário.");
+    }
     return { id: created.user.id };
   });
