@@ -6,4 +6,4 @@
 - [x] Implementar cadastro inicial da empresa
 - [x] Implementar cadastro de funcionários com login e senha
 - [x] Implementar marcação de entrada/saída e cálculo de horas extras
-- [ ] Validar as telas principais em computador e celular
+- [x] Validar as telas principais em computador e celular
