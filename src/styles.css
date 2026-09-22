@@ -203,6 +203,32 @@
   transform: scale(0.98);
 }
 
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 700ms cubic-bezier(.2,.7,.2,1), transform 700ms cubic-bezier(.2,.7,.2,1);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes phone-float {
+  0%, 100% { transform: translateY(4px); }
+  50% { transform: translateY(-8px); }
+}
+
+.phone-float {
+  animation: phone-float 5s ease-in-out infinite;
+}
+
 html {
   scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .phone-float { animation: none; }
+  html { scroll-behavior: auto; }
 }
