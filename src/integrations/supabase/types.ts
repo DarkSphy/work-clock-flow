@@ -14,7 +14,136 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      companies: {
+        Row: {
+          break_minutes: number
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+          work_end: string
+          work_start: string
+          workday_minutes: number
+        }
+        Insert: {
+          break_minutes?: number
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+          work_end?: string
+          work_start?: string
+          workday_minutes?: number
+        }
+        Update: {
+          break_minutes?: number
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+          work_end?: string
+          work_start?: string
+          workday_minutes?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          full_name: string
+          job_title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          full_name?: string
+          job_title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          full_name?: string
+          job_title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_entries: {
+        Row: {
+          company_id: string
+          created_at: string
+          event_type: Database["public"]["Enums"]["time_event_type"]
+          id: string
+          recorded_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          event_type: Database["public"]["Enums"]["time_event_type"]
+          id?: string
+          recorded_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          event_type?: Database["public"]["Enums"]["time_event_type"]
+          id?: string
+          recorded_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +152,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "employee"
+      time_event_type: "clock_in" | "clock_out"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +280,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "employee"],
+      time_event_type: ["clock_in", "clock_out"],
+    },
   },
 } as const
