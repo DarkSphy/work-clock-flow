@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { createEmployee } from "@/lib/employees.functions";
 
-type SessionUser = { id: string; email?: string };
+type SessionUser = { id: string; email: string | undefined };
 type Profile = { user_id: string; company_id: string | null; full_name: string; job_title: string };
 type Company = { id: string; name: string; workday_minutes: number; work_start: string; work_end: string; break_minutes: number };
 type Entry = { id: string; event_type: "clock_in" | "clock_out"; recorded_at: string };
