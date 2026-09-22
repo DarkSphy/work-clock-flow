@@ -219,8 +219,19 @@
   50% { transform: translateY(-8px); }
 }
 
+@keyframes loading-progress {
+  0% { transform: translateX(-110%); }
+  55% { transform: translateX(35%); }
+  100% { transform: translateX(210%); }
+}
+
 .phone-float {
   animation: phone-float 5s ease-in-out infinite;
+}
+
+.loading-bar {
+  width: 58%;
+  animation: loading-progress 1.6s ease-in-out infinite;
 }
 
 html {
@@ -230,6 +241,7 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; transition: none; }
   .phone-float { animation: none; }
+  .loading-bar { animation: none; transform: translateX(40%); }
   html { scroll-behavior: auto; }
 }
 
