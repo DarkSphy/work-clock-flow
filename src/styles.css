@@ -246,6 +246,11 @@ html {
 }
 
 @media (max-width: 639px) {
+  .marketing .fixed.inset-0 > section {
+    max-height: calc(100dvh - 1.5rem);
+    overflow-y: auto;
+  }
+
   .marketing .phone-float {
     width: min(330px, calc(100vw - 92px));
     border-width: 6px;

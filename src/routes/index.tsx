@@ -302,10 +302,8 @@ function Onboarding({ user, profile, onDone }: { user: SessionUser; profile: Pro
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(""); const form = new FormData(event.currentTarget);
     const fullName = String(form.get("fullName")); const companyName = String(form.get("companyName"));
-    const { error: profileError } = await supabase.from("profiles").update({ full_name: fullName, job_title: "Administrador" }).eq("user_id", user.id);
-    if (profileError) { setError("Não foi possível salvar seu perfil."); setBusy(false); return; }
-    const { error: companyError } = await supabase.from("companies").insert({ name: companyName, owner_id: user.id });
-    if (companyError) setError("Não foi possível criar a empresa."); else await onDone(); setBusy(false);
+    const { error: companyError } = await supabase.rpc("onboard_company", { _company_name: companyName, _full_name: fullName });
+    if (companyError) setError(companyError.message || "Não foi possível criar a empresa."); else await onDone(); setBusy(false);
   }
   return <AppBackdrop><main className="relative mx-auto flex min-h-screen max-w-xl items-center px-5"><section className="glass-panel w-full rounded-2xl p-7"><Brand /><h1 className="mt-8 font-display text-4xl font-black">Vamos preparar a Simbi.</h1><p className="mt-2 text-muted-foreground">Cadastre os dados básicos da empresa para começar.</p><form className="mt-7 space-y-4" onSubmit={submit}><Field label="Seu nome" name="fullName" defaultValue={profile?.full_name ?? ""} /><Field label="Nome da empresa" name="companyName" placeholder="Ex.: Padaria Aurora" /><Button variant="kinetic" size="punch" className="w-full" disabled={busy}>{busy ? "Criando..." : "Criar empresa"}</Button></form>{error && <p className="mt-4 text-sm text-warning">{error}</p>}</section></main></AppBackdrop>;
 }
