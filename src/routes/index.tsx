@@ -220,7 +220,7 @@ function AuthScreen({ onSignedIn }: { onSignedIn: (user: SessionUser) => void })
       const fullName = String(form.get("fullName"));
       const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin } });
       if (error) setNotice(error.message);
-      else if (!data.session) setNotice("Confira seu e-mail para confirmar o acesso.");
+      else if (!data.session) { setMode("signin"); setNotice(`Conta criada com sucesso! Abra o e-mail enviado para ${email} e confirme seu acesso. Depois, volte aqui para entrar.`); }
       else if (data.user) onSignedIn({ id: data.user.id, email: data.user.email });
     } else {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
