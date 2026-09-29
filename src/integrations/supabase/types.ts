@@ -52,28 +52,37 @@ export type Database = {
       }
       profiles: {
         Row: {
+          break_minutes: number | null
           company_id: string | null
           created_at: string
           full_name: string
           job_title: string
           updated_at: string
           user_id: string
+          work_end: string | null
+          work_start: string | null
         }
         Insert: {
+          break_minutes?: number | null
           company_id?: string | null
           created_at?: string
           full_name?: string
           job_title?: string
           updated_at?: string
           user_id: string
+          work_end?: string | null
+          work_start?: string | null
         }
         Update: {
+          break_minutes?: number | null
           company_id?: string | null
           created_at?: string
           full_name?: string
           job_title?: string
           updated_at?: string
           user_id?: string
+          work_end?: string | null
+          work_start?: string | null
         }
         Relationships: [
           {

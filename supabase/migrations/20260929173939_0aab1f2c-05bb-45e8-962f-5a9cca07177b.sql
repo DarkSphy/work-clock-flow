@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN work_start time without time zone, ADD COLUMN work_end time without time zone, ADD COLUMN break_minutes integer CHECK (break_minutes BETWEEN 0 AND 480);
