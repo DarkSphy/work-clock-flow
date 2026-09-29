@@ -42,11 +42,12 @@ function Index() {
   const [showTeam, setShowTeam] = useState(false);
 
   const loadWorkspace = useCallback(async (currentUser: SessionUser) => {
-    const { data: profileData } = await supabase
+    const { data: profileData, error: profileError } = await supabase
       .from("profiles")
       .select("user_id, company_id, full_name, job_title, work_start, work_end, break_minutes")
       .eq("user_id", currentUser.id)
       .maybeSingle();
+    if (profileError) { setMessage("Não foi possível carregar sua conta. Atualize a página e tente novamente."); setLoading(false); return; }
     const nextProfile = profileData as Profile | null;
     setProfile(nextProfile);
     if (!nextProfile?.company_id) {
@@ -73,7 +74,7 @@ function Index() {
       setUser(current);
       if (current) loadWorkspace(current);
       else setLoading(false);
-    });
+    }).catch(() => { setMessage("Não foi possível conectar à sua conta. Atualize a página e tente novamente."); setLoading(false); });
   }, [loadWorkspace]);
 
   useEffect(() => {
@@ -83,6 +84,7 @@ function Index() {
 
   if (loading) return <LoadingScreen />;
   if (!user) return <AuthScreen onSignedIn={(next) => { setUser(next); setLoading(true); loadWorkspace(next); }} />;
+  if (message && !profile) return <AppBackdrop><main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-5 text-center"><p>{message}</p><Button onClick={() => window.location.reload()}>Tentar novamente</Button></main></AppBackdrop>;
   if (!profile?.company_id) return <Onboarding user={user} profile={profile} onDone={() => loadWorkspace(user)} />;
   if (!company) return <AppBackdrop><p>Não foi possível carregar a empresa.</p></AppBackdrop>;
 
@@ -216,29 +218,38 @@ function AuthScreen({ onSignedIn }: { onSignedIn: (user: SessionUser) => void })
     event.preventDefault(); setBusy(true); setNotice("");
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email")); const password = String(form.get("password"));
-    if (mode === "signup") {
-      const fullName = String(form.get("fullName"));
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin } });
-      if (error) setNotice(error.message);
-      else if (!data.session) { setMode("signin"); setNotice(`Conta criada com sucesso! Abra o e-mail enviado para ${email} e confirme seu acesso. Depois, volte aqui para entrar.`); }
-      else if (data.user) onSignedIn({ id: data.user.id, email: data.user.email });
-    } else {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setNotice("E-mail ou senha incorretos.");
-      else if (data.user) onSignedIn({ id: data.user.id, email: data.user.email });
+    try {
+      if (mode === "signup") {
+        const fullName = String(form.get("fullName"));
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin } });
+        if (error) setNotice(error.message);
+        else if (!data.session) { setMode("signin"); setNotice(`Confira o e-mail enviado para ${email} e confirme sua conta antes de entrar.`); }
+        else if (data.user) onSignedIn({ id: data.user.id, email: data.user.email });
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) setNotice(error.message.toLowerCase().includes("email not confirmed") ? "Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada e o spam." : "Não foi possível entrar com e-mail e senha. Confira seus dados; se criou a conta com Google, use o botão abaixo.");
+        else if (data.user) onSignedIn({ id: data.user.id, email: data.user.email });
+      }
+    } catch {
+      setNotice("Não foi possível conectar agora. Tente novamente em instantes.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function googleSignIn() {
-    setBusy(true);
-    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (result.error) setNotice("Não foi possível entrar com o Google.");
-    if (!result.redirected) {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) onSignedIn({ id: data.user.id, email: data.user.email });
-    }
-    setBusy(false);
+    setBusy(true); setNotice("");
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+      if (result.error) setNotice("Não foi possível entrar com o Google. Tente novamente.");
+      else if (!result.redirected) {
+        const { data } = await supabase.auth.getUser();
+        if (data.user) onSignedIn({ id: data.user.id, email: data.user.email });
+        else setNotice("O acesso com Google não foi concluído. Tente novamente.");
+      }
+    } catch {
+      setNotice("Não foi possível conectar ao Google. Tente novamente.");
+    } finally { setBusy(false); }
   }
 
   return <div className="marketing min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
@@ -302,8 +313,14 @@ function Onboarding({ user, profile, onDone }: { user: SessionUser; profile: Pro
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(""); const form = new FormData(event.currentTarget);
     const fullName = String(form.get("fullName")); const companyName = String(form.get("companyName"));
-    const { error: companyError } = await supabase.rpc("onboard_company", { _company_name: companyName, _full_name: fullName });
-    if (companyError) setError(companyError.message || "Não foi possível criar a empresa."); else await onDone(); setBusy(false);
+    try {
+      const { error: companyError } = await supabase.from("companies").insert({ name: companyName.trim(), owner_id: user.id });
+      if (companyError) { setError(companyError.message || "Não foi possível criar a empresa."); return; }
+      const { error: nameError } = await supabase.from("profiles").update({ full_name: fullName.trim() }).eq("user_id", user.id);
+      if (nameError) setError("Empresa criada, mas não foi possível salvar seu nome. Atualize a página.");
+      await onDone();
+    } catch { setError("Não foi possível criar a empresa. Tente novamente."); }
+    finally { setBusy(false); }
   }
   return <AppBackdrop><main className="relative mx-auto flex min-h-screen max-w-xl items-center px-5"><section className="glass-panel w-full rounded-2xl p-7"><Brand /><h1 className="mt-8 font-display text-4xl font-black">Vamos preparar a Simbi.</h1><p className="mt-2 text-muted-foreground">Cadastre os dados básicos da empresa para começar.</p><form className="mt-7 space-y-4" onSubmit={submit}><Field label="Seu nome" name="fullName" defaultValue={profile?.full_name ?? ""} /><Field label="Nome da empresa" name="companyName" placeholder="Ex.: Padaria Aurora" /><Button variant="kinetic" size="punch" className="w-full" disabled={busy}>{busy ? "Criando..." : "Criar empresa"}</Button></form>{error && <p className="mt-4 text-sm text-warning">{error}</p>}</section></main></AppBackdrop>;
 }
@@ -322,10 +339,10 @@ function TeamDialog({ members, onClose, onCreated }: { members: Member[]; onClos
 
 function Metric({ target, suffix, label }: { target: number; suffix: string; label: string }) {
   const ref = useRef<HTMLDivElement>(null); const [value, setValue] = useState(0);
-  useEffect(() => { const node = ref.current; if (!node) return; const observer = new IntersectionObserver(([entry]) => { if (!entry.isIntersecting) return; observer.disconnect(); if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setValue(target); return; } const started = performance.now(); const tick = (now: number) => { const progress = Math.min((now - started) / 1200, 1); setValue(Math.round(target * (1 - Math.pow(1 - progress, 3)))); if (progress < 1) requestAnimationFrame(tick); }; requestAnimationFrame(tick); }, { threshold: .5 }); observer.observe(node); return () => observer.disconnect(); }, [target]);
+  useEffect(() => { const node = ref.current; if (!node) return; const observer = new IntersectionObserver(([entry]) => { if (!entry?.isIntersecting) return; observer.disconnect(); if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setValue(target); return; } const started = performance.now(); const tick = (now: number) => { const progress = Math.min((now - started) / 1200, 1); setValue(Math.round(target * (1 - Math.pow(1 - progress, 3)))); if (progress < 1) requestAnimationFrame(tick); }; requestAnimationFrame(tick); }, { threshold: .5 }); observer.observe(node); return () => observer.disconnect(); }, [target]);
   return <div ref={ref}><p className="text-3xl font-semibold tracking-[-0.04em] tabular-nums sm:text-4xl">{value}{suffix}</p><p className="mt-2 text-sm text-[#6e6e73]">{label}</p></div>;
 }
-function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) { const ref = useRef<HTMLDivElement>(null); const [visible, setVisible] = useState(false); useEffect(() => { const node = ref.current; if (!node) return; const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } }, { threshold: .08 }); observer.observe(node); return () => observer.disconnect(); }, []); return <div ref={ref} className={`reveal ${visible ? "is-visible" : ""}`} style={{ transitionDelay: `${delay}ms` }}>{children}</div>; }
+function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) { const ref = useRef<HTMLDivElement>(null); const [visible, setVisible] = useState(false); useEffect(() => { const node = ref.current; if (!node) return; const observer = new IntersectionObserver(([entry]) => { if (entry?.isIntersecting) { setVisible(true); observer.disconnect(); } }, { threshold: .08 }); observer.observe(node); return () => observer.disconnect(); }, []); return <div ref={ref} className={`reveal ${visible ? "is-visible" : ""}`} style={{ transitionDelay: `${delay}ms` }}>{children}</div>; }
 function ProductPhone() { return <div className="relative mx-auto mt-12 flex min-h-[620px] max-w-[620px] items-end justify-center overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_50%_10%,#dff1ff_0,#f4f7fb_42%,#e8edf3_100%)] px-5 pt-10 sm:min-h-[700px]"><div className="phone-float relative w-[330px] rounded-[52px] border-[7px] border-[#17171a] bg-[#f7f7f9] p-3 pb-0 shadow-[0_35px_70px_rgba(0,0,0,.28)] sm:w-[370px]"><div className="relative min-h-[640px] overflow-hidden rounded-[40px] bg-white px-6 pb-8 pt-16 sm:min-h-[680px]"><div className="absolute left-1/2 top-3 h-7 w-28 -translate-x-1/2 rounded-full bg-[#17171a]" /><div className="flex items-center justify-between"><Brand compact /><div className="grid size-9 place-items-center rounded-full bg-[#eaf3ff] text-xs font-semibold text-[#0066cc]">MA</div></div><p className="mt-10 text-sm text-[#6e6e73]">Bom dia, Marina</p><h4 className="mt-1 text-3xl font-semibold tracking-tight">Sua jornada</h4><div className="mt-8 rounded-[26px] bg-[#f5f5f7] p-6 text-center"><p className="text-sm text-[#6e6e73]">Tempo trabalhado hoje</p><p className="mt-3 text-5xl font-semibold tracking-[-0.05em] tabular-nums">06:42</p><div className="mx-auto mt-5 h-1.5 max-w-52 overflow-hidden rounded-full bg-black/10"><div className="h-full w-[78%] rounded-full bg-[#0071e3]" /></div><p className="mt-3 text-xs text-[#86868b]">Meta diária · 8h</p></div><button className="mt-6 h-14 w-full rounded-2xl bg-[#0071e3] font-semibold text-white">Registrar saída</button><div className="mt-7"><div className="flex items-center justify-between"><p className="font-semibold">Registros de hoje</p><span className="text-xs text-[#0066cc]">Ver histórico</span></div>{[["Entrada", "08:02"], ["Intervalo", "12:06"], ["Retorno", "13:04"]].map(([label, time]) => <div key={label} className="mt-4 flex items-center justify-between border-b border-black/[.06] pb-3 text-sm"><span className="text-[#6e6e73]">{label}</span><span className="font-semibold tabular-nums">{time}</span></div>)}</div></div></div></div>; }
 function ManagementPreview() { const bars = [42, 58, 51, 74, 67, 88, 79, 93, 82, 96, 72, 86]; return <div className="mt-10 overflow-hidden rounded-[24px] border border-white/10 bg-[#f6f7f9] text-[#1d1d1f] shadow-2xl"><div className="flex items-center justify-between border-b border-black/[.06] px-5 py-4 sm:px-7"><div><p className="text-xs text-[#6e6e73]">Visão geral</p><p className="mt-0.5 font-semibold">Aurora Serviços</p></div><div className="flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-medium shadow-sm"><CalendarDays className="size-3.5 text-[#0066cc]" />Esta semana</div></div><div className="p-5 sm:p-7"><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[["24", "Funcionários", "+2 este mês"], ["17", "Em expediente", "Agora"], ["842h", "Horas no mês", "+8,4%"], ["03", "Atenções", "Revisar"]].map(([value, label, detail]) => <div key={label} className="rounded-2xl bg-white p-4 shadow-sm"><p className="text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs font-medium text-[#6e6e73]">{label}</p><p className="mt-3 text-[10px] text-[#0066cc]">{detail}</p></div>)}</div><div className="mt-3 grid gap-3 lg:grid-cols-[1.35fr_.8fr]"><div className="rounded-2xl bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><p className="font-semibold">Horas registradas</p><p className="mt-1 text-xs text-[#86868b]">Últimos 12 dias</p></div><p className="text-sm font-semibold text-[#15704a]">+12,6%</p></div><div className="mt-8 flex h-36 items-end gap-2">{bars.map((height, index) => <div key={index} className="flex-1 rounded-t-sm bg-[#0071e3]" style={{ height: `${height}%`, opacity: .35 + index / 18 }} />)}</div><div className="mt-3 flex justify-between text-[9px] text-[#86868b]"><span>01 set</span><span>06 set</span><span>12 set</span></div></div><div className="rounded-2xl bg-white p-5 shadow-sm"><p className="font-semibold">Equipe agora</p><p className="mt-1 text-xs text-[#86868b]">17 de 24 ativos</p><div className="mt-5 space-y-4">{[["MC", "Marina Costa", "Em expediente"], ["RL", "Rafael Lima", "Em intervalo"], ["AS", "Ana Souza", "Em expediente"]].map(([avatar, name, status], index) => <div key={name} className="flex items-center gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#eaf3ff] text-[10px] font-semibold text-[#0066cc]">{avatar}</span><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{name}</p><p className="mt-0.5 text-[10px] text-[#86868b]">{status}</p></div><span className={`size-2 rounded-full ${index === 1 ? "bg-[#ff9f0a]" : "bg-[#34c759]"}`} /></div>)}</div><button className="mt-5 w-full rounded-xl bg-[#f5f5f7] py-2.5 text-xs font-semibold text-[#0066cc]">Ver toda a equipe</button></div></div></div></div>; }
 function FeatureCard({ icon, eyebrow, title, text, visual, className = "", dark = false }: { icon: React.ReactNode; eyebrow: string; title: string; text: string; visual: React.ReactNode; className?: string; dark?: boolean }) { return <article className={`overflow-hidden rounded-[30px] p-7 sm:p-10 ${className}`}><div className={dark ? "text-[#2997ff]" : "text-[#0071e3]"}>{icon}</div><p className={`mt-6 text-sm font-semibold ${dark ? "text-white/55" : "text-[#6e6e73]"}`}>{eyebrow}</p><h3 className="mt-3 max-w-xl text-3xl font-semibold leading-tight tracking-[-0.035em] sm:text-4xl">{title}</h3><p className={`mt-4 max-w-xl leading-relaxed ${dark ? "text-white/60" : "text-[#6e6e73]"}`}>{text}</p>{visual}</article>; }
@@ -344,6 +361,6 @@ function formatTime(value: string) { return new Date(value).toLocaleTimeString("
 function formatClock(minutes: number) { const safe = Math.max(0, Math.floor(minutes)); return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`; }
 function formatDuration(minutes: number) { return `${Math.floor(minutes / 60)}h ${Math.floor(minutes % 60)}min`; }
 function formatSigned(minutes: number) { const sign = minutes >= 0 ? "+" : "−"; return `${sign}${Math.floor(Math.abs(minutes) / 60)}h ${Math.abs(Math.floor(minutes)) % 60}m`; }
-function scheduleMinutes(workStart: string | null | undefined, workEnd: string | null | undefined, breakMinutes: number | null | undefined, company: Company) { const start = workStart ?? company.work_start; const end = workEnd ?? company.work_end; const [startHour, startMinute] = start.slice(0, 5).split(":").map(Number); const [endHour, endMinute] = end.slice(0, 5).split(":").map(Number); const difference = (endHour * 60 + endMinute) - (startHour * 60 + startMinute) - (breakMinutes ?? company.break_minutes); return difference > 0 ? difference : company.workday_minutes; }
+function scheduleMinutes(workStart: string | null | undefined, workEnd: string | null | undefined, breakMinutes: number | null | undefined, company: Company) { const start = workStart ?? company.work_start; const end = workEnd ?? company.work_end; const [startHour = 0, startMinute = 0] = start.slice(0, 5).split(":").map(Number); const [endHour = 0, endMinute = 0] = end.slice(0, 5).split(":").map(Number); const difference = (endHour * 60 + endMinute) - (startHour * 60 + startMinute) - (breakMinutes ?? company.break_minutes); return difference > 0 ? difference : company.workday_minutes; }
 function calculateWorkedMinutes(entries: Entry[], now: Date) { let total = 0; let start: Date | null = null; for (const entry of entries) { if (entry.event_type === "clock_in") start = new Date(entry.recorded_at); else if (start) { total += new Date(entry.recorded_at).getTime() - start.getTime(); start = null; } } if (start) total += now.getTime() - start.getTime(); return total / 60000; }
 function calculateExtraMinutes(entries: Entry[], target: number) { const grouped = new Map<string, Entry[]>(); for (const entry of [...entries].reverse()) { const key = new Date(entry.recorded_at).toDateString(); grouped.set(key, [...(grouped.get(key) ?? []), entry]); } let balance = 0; for (const dayEntries of grouped.values()) balance += calculateWorkedMinutes(dayEntries, new Date()) - target; return Math.round(balance); }

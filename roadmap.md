@@ -7,3 +7,4 @@
 - [x] Implementar cadastro de funcionários com login e senha
 - [x] Implementar marcação de entrada/saída e cálculo de horas extras
 - [x] Validar as telas principais em computador e celular
+- [x] Corrigir acesso: horários de perfis, criação de empresa e mensagens claras no login
