@@ -52,6 +52,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          work_schedule: Json | null
+          employment_start: string
           break_minutes: number | null
           company_id: string | null
           created_at: string
@@ -63,6 +65,8 @@ export type Database = {
           work_start: string | null
         }
         Insert: {
+          work_schedule?: Json | null
+          employment_start?: string
           break_minutes?: number | null
           company_id?: string | null
           created_at?: string
@@ -74,6 +78,8 @@ export type Database = {
           work_start?: string | null
         }
         Update: {
+          work_schedule?: Json | null
+          employment_start?: string
           break_minutes?: number | null
           company_id?: string | null
           created_at?: string
@@ -158,7 +164,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      employee_pin_status: { Args: { p_company: string }; Returns: { user_id: string }[] }
+      employee_pin_available: { Args: { p_company: string; p_pin: string; p_user?: string }; Returns: boolean }
+      set_employee_pin: { Args: { p_company: string; p_user: string; p_pin: string }; Returns: undefined }
+      identify_clock_pin: { Args: { p_company: string; p_pin: string }; Returns: Json }
+      confirm_clock_pin: { Args: { p_company: string; p_ticket: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "employee"

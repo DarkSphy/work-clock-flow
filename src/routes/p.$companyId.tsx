@@ -1,130 +1,204 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, CheckCircle2, Clock3, LogOut } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-
+import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { Check, Delete, LogIn, LogOut } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
+import { identifyClockPin, confirmClockPin } from "@/lib/clock.functions";
 
 export const Route = createFileRoute("/p/$companyId")({
-  head: () => ({ meta: [
-    { title: "Ponto da empresa | Simbi" },
-    { name: "description", content: "Entre com seu acesso para registrar seu ponto na Simbi." },
-    { property: "og:title", content: "Ponto da empresa | Simbi" },
-    { property: "og:description", content: "Acesso individual para registrar o ponto da sua empresa." },
-    { property: "og:type", content: "website" },
-    { name: "twitter:card", content: "summary" },
-  ] }),
+  head: () => ({
+    meta: [{ title: "Registrar ponto | Simbi" }, { name: "robots", content: "noindex" }],
+  }),
   component: CompanyPoint,
 });
 
-type Employee = { id: string; name: string; companyName: string };
-type Receipt = { name: string; companyName: string; kind: "Entrada" | "Saída"; time: string };
-
+type Person = { name: string; eventType: "clock_in" | "clock_out"; ticket: string };
 function CompanyPoint() {
   const { companyId } = Route.useParams();
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const identify = useServerFn(identifyClockPin);
+  const confirm = useServerFn(confirmClockPin);
+  const [pin, setPin] = useState("");
+  const [person, setPerson] = useState<Person | null>(null);
+  const [receipt, setReceipt] = useState<{
+    name: string;
+    eventType: string;
+    recordedAt: string;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [preparing, setPreparing] = useState(true);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
-  const submitting = useRef(false);
-
-  // A shared terminal must never retain the previous worker's session.
+  const inFlight = useRef(false);
   useEffect(() => {
-    let active = true;
-    supabase.auth.signOut({ scope: "local" }).then(({ error: signOutError }) => {
-      if (!active) return;
-      if (signOutError) setError("Não foi possível preparar o aparelho. Atualize a página.");
-      else setReady(true);
-      setPreparing(false);
-    }).catch(() => { if (active) { setError("Não foi possível preparar o aparelho. Atualize a página."); setPreparing(false); } });
-    return () => { active = false; };
+    setReady(true);
   }, []);
-
-  async function signOut() {
-    setEmployee(null);
-    const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
-    if (signOutError) setError("Não foi possível encerrar a sessão. Atualize a página antes do próximo funcionário.");
+  function reset() {
+    setPin("");
+    setPerson(null);
+    setReceipt(null);
+    setError("");
   }
-
-  async function signIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy || !ready || employee) return;
-    setBusy(true); setError(""); setReceipt(null);
-    const form = new FormData(event.currentTarget);
+  useEffect(() => {
+    if (!person && !receipt) return;
+    const timeout = window.setTimeout(reset, receipt ? 6000 : 45000);
+    return () => window.clearTimeout(timeout);
+  }, [person, receipt]);
+  async function digit(value: string) {
+    if (!ready || inFlight.current || person || receipt) return;
+    const next = value === "delete" ? pin.slice(0, -1) : (pin + value).slice(0, 4);
+    setPin(next);
+    setError("");
+    if (next.length !== 4) return;
+    inFlight.current = true;
+    setBusy(true);
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({ email: String(form.get("email")).trim(), password: String(form.get("password")) });
-      if (authError || !data.user) { setError("E-mail ou senha incorretos. Confira os dados e tente novamente."); return; }
-      const { data: profile, error: profileError } = await supabase.from("profiles").select("full_name, company_id").eq("user_id", data.user.id).maybeSingle();
-      const { data: role, error: roleError } = await supabase.from("user_roles").select("role").eq("user_id", data.user.id).eq("role", "employee").maybeSingle();
-      if (profileError || roleError || !profile || profile.company_id !== companyId || !role) {
-        await signOut();
-        setError("Este acesso não pertence aos funcionários desta empresa. Confira o link com o responsável.");
-        return;
-      }
-      const { data: company, error: companyError } = await supabase.from("companies").select("name").eq("id", companyId).maybeSingle();
-      if (companyError || !company) {
-        await signOut(); setError("Não foi possível confirmar a empresa. Tente novamente."); return;
-      }
-      setEmployee({ id: data.user.id, name: profile.full_name, companyName: company.name });
+      const result = await identify({ data: { companyId, pin: next } });
+      setPin("");
+      if ("error" in result) setError(result.error);
+      else setPerson(result);
     } catch {
-      await signOut(); setError("Não foi possível conectar agora. Tente novamente.");
-    } finally { setBusy(false); }
+      setPin("");
+      setError("Não foi possível consultar seu PIN. Tente novamente ou avise o responsável.");
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
   }
-
-  async function register() {
-    if (!employee || submitting.current) return;
-    submitting.current = true; setBusy(true); setError("");
-    try {
-      const { data: currentUser, error: userError } = await supabase.auth.getUser();
-      if (userError || currentUser.user?.id !== employee.id) { await signOut(); setError("Sua sessão terminou. Entre novamente."); return; }
-      const { data: last, error: lastError } = await supabase.from("time_entries").select("event_type, recorded_at").eq("company_id", companyId).eq("user_id", employee.id).order("recorded_at", { ascending: false }).limit(1).maybeSingle();
-      if (lastError) throw lastError;
-      if (last && Date.now() - new Date(last.recorded_at).getTime() < 60_000) {
-        setError("Aguarde um minuto antes de registrar outro ponto."); return;
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (/^\d$/.test(event.key)) {
+        event.preventDefault();
+        void digit(event.key);
+      } else if (event.key === "Backspace") {
+        event.preventDefault();
+        void digit("delete");
       }
-      const eventType = last?.event_type === "clock_in" ? "clock_out" : "clock_in";
-      const { data: entry, error: entryError } = await supabase.from("time_entries").insert({ company_id: companyId, user_id: employee.id, event_type: eventType }).select("recorded_at").single();
-      if (entryError || !entry) throw entryError ?? new Error("Falha ao registrar o ponto");
-      const completed: Receipt = { name: employee.name, companyName: employee.companyName, kind: eventType === "clock_in" ? "Entrada" : "Saída", time: new Date(entry.recorded_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) };
-      await signOut();
-      setReceipt(completed);
-    } catch { setError("Não foi possível registrar o ponto. Tente novamente ou avise o responsável."); }
-    finally { submitting.current = false; setBusy(false); }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  });
+  async function register() {
+    if (!person || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await confirm({ data: { companyId, ticket: person.ticket } });
+      if ("error" in result) {
+        setPerson(null);
+        setError(result.error);
+      } else {
+        setReceipt({ ...result, name: person.name });
+        setPerson(null);
+      }
+    } catch {
+      setPerson(null);
+      setError(
+        "Não foi possível confirmar. Confira seus registros com o responsável antes de repetir.",
+      );
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
   }
-
-  return <div className="min-h-screen bg-background text-foreground">
-    <header className="mx-auto flex max-w-5xl items-center justify-between border-b border-border px-5 py-5">
-      <Link to="/" className="flex items-center gap-2 font-display text-2xl font-bold" aria-label="Simbi — início">simbi</Link>
-      <span className="flex items-center gap-2 text-sm text-muted-foreground"><Clock3 className="size-4" /> Ponto da empresa</span>
-    </header>
-    <main className="mx-auto flex min-h-[calc(100vh-82px)] max-w-md flex-col justify-center px-5 py-10">
-      {receipt ? <div className="text-center" role="status">
-        <CheckCircle2 className="mx-auto size-14 text-positive" />
-        <p className="mt-6 text-sm font-semibold text-primary">{receipt.companyName}</p>
-        <h1 className="mt-3 font-display text-3xl font-bold">{receipt.kind} registrada.</h1>
-        <p className="mt-4 text-muted-foreground">{receipt.name} · {receipt.time}</p>
-        <Button className="mt-10 w-full" size="lg" onClick={() => { setReceipt(null); setError(""); }}>Próximo funcionário</Button>
-      </div> : employee ? <div>
-        <p className="text-sm font-semibold text-primary">{employee.companyName}</p>
-        <h1 className="mt-3 font-display text-3xl font-bold">Olá, {employee.name}.</h1>
-        <p className="mt-3 text-muted-foreground">Confirme seu registro de ponto.</p>
-        <Button variant="kinetic" size="punch" className="mt-9 w-full" onClick={register} disabled={busy}> {busy ? "Registrando..." : "Registrar ponto"}</Button>
-        <Button variant="ghost" className="mt-3 w-full" onClick={signOut} disabled={busy}><LogOut className="size-4" /> Sair sem registrar</Button>
-      </div> : <div>
-        <p className="text-sm font-semibold text-primary">ACESSO DA EQUIPE</p>
-        <h1 className="mt-3 font-display text-3xl font-bold">Registrar ponto</h1>
-        <p className="mt-3 text-muted-foreground">Entre com o e-mail e a senha fornecidos pela empresa.</p>
-        <form className="mt-9 space-y-5" onSubmit={signIn}>
-          <label className="block text-sm font-semibold">E-mail<Input className="mt-2 h-12" name="email" type="email" autoComplete="off" required disabled={preparing || busy} /></label>
-          <label className="block text-sm font-semibold">Senha<Input className="mt-2 h-12" name="password" type="password" autoComplete="off" required disabled={preparing || busy} /></label>
-          <Button className="h-12 w-full" type="submit" disabled={!ready || busy}>{preparing ? "Preparando..." : busy ? "Entrando..." : "Entrar"}</Button>
-        </form>
-        <Link to="/" className="mt-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Voltar à Simbi</Link>
-      </div>}
-      {error && <p className="mt-6 text-center text-sm text-destructive" role="alert">{error}</p>}
+  return (
+    <main className="flex min-h-svh items-center justify-center bg-[#f5f5f7] px-6 py-8 text-[#1d1d1f]">
+      <section className="w-full max-w-sm text-center" aria-busy={busy}>
+        {receipt ? (
+          <div role="status">
+            <div className="mx-auto grid size-20 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+              <Check className="size-10" />
+            </div>
+            <h1 className="mt-6 text-3xl font-semibold">
+              {receipt.eventType === "clock_in" ? "Entrada registrada" : "Saída registrada"}
+            </h1>
+            <p className="mt-4 text-xl">{receipt.name}</p>
+            <p className="mt-2 text-muted-foreground">
+              {new Date(receipt.recordedAt).toLocaleTimeString("pt-BR", {
+                timeZone: "America/Sao_Paulo",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
+            <Button onClick={reset} className="mt-8 h-14 w-full rounded-2xl">
+              Próximo funcionário
+            </Button>
+          </div>
+        ) : person ? (
+          <div>
+            <div className="mx-auto grid size-20 place-items-center rounded-full bg-blue-100 text-blue-700">
+              {person.eventType === "clock_in" ? (
+                <LogIn className="size-9" />
+              ) : (
+                <LogOut className="size-9" />
+              )}
+            </div>
+            <p className="mt-6 text-lg text-muted-foreground">Olá,</p>
+            <h1 className="mt-2 break-words text-3xl font-semibold">{person.name}</h1>
+            <p className="mt-5 text-xl">
+              Você está {person.eventType === "clock_in" ? "entrando" : "saindo"}.
+            </p>
+            <Button
+              className="mt-8 h-16 w-full rounded-2xl text-lg"
+              disabled={!ready || busy}
+              onClick={register}
+            >
+              {busy
+                ? "Registrando..."
+                : person.eventType === "clock_in"
+                  ? "Confirmar entrada"
+                  : "Confirmar saída"}
+            </Button>
+            <Button variant="ghost" className="mt-3 h-12 w-full" disabled={busy} onClick={reset}>
+              Não sou eu / Cancelar
+            </Button>
+          </div>
+        ) : (
+          <>
+            <h1 className="text-4xl font-semibold tracking-tight">Registrar ponto</h1>
+            <div
+              className="my-10 flex justify-center gap-4"
+              role="status"
+              aria-label={`${pin.length} de 4 dígitos digitados`}
+            >
+              {[0, 1, 2, 3].map((i) => (
+                <span
+                  key={i}
+                  className={`size-4 rounded-full ${i < pin.length ? "bg-[#0071e3]" : "bg-black/15"}`}
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "delete"].map(
+                (value, index) =>
+                  value ? (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-label={value === "delete" ? "Apagar último dígito" : value}
+                      disabled={!ready || busy}
+                      onClick={() => void digit(value)}
+                      className="flex h-20 touch-manipulation items-center justify-center rounded-2xl bg-white text-3xl font-medium shadow-sm transition hover:bg-blue-50 active:scale-95 focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-50"
+                    >
+                      {value === "delete" ? <Delete className="size-7" /> : value}
+                    </button>
+                  ) : (
+                    <span key={index} />
+                  ),
+              )}
+            </div>
+            {busy && (
+              <p className="mt-6 text-sm" role="status">
+                Consultando...
+              </p>
+            )}
+          </>
+        )}
+        {error && (
+          <p className="mt-6 text-sm text-red-700" role="alert">
+            {error}
+          </p>
+        )}
+      </section>
     </main>
-  </div>;
+  );
 }
