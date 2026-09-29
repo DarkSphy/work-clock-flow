@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Create a company through the authenticated `companies` insert; its database trigger attaches the owner profile and admin role, because the former onboarding RPC is no longer available.
+- Keep each company's shared-device clock at `/p/$companyId` with an employee-only email/password session, locally signed out before and after each registration; this prevents one worker's session from carrying over to the next.

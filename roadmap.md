@@ -9,3 +9,5 @@
 - [x] Validar as telas principais em computador e celular
 - [x] Corrigir acesso: horários de perfis, criação de empresa e mensagens claras no login
 - [x] Ajustar a composição dos mockups para computador e telefone
+- [x] Criar link exclusivo de ponto para cada empresa com entrada por e-mail e senha
+- [x] Validar o registro de ponto pelo link e a troca de funcionário no aparelho compartilhado
