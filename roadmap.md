@@ -8,4 +8,4 @@
 - [x] Implementar marcação de entrada/saída e cálculo de horas extras
 - [x] Validar as telas principais em computador e celular
 - [x] Corrigir acesso: horários de perfis, criação de empresa e mensagens claras no login
-- [ ] Ajustar a composição dos mockups para computador e telefone
+- [x] Ajustar a composição dos mockups para computador e telefone
