@@ -252,7 +252,7 @@ html {
   }
 
   .marketing .phone-float {
-    width: min(330px, calc(100vw - 92px));
+    width: min(330px, calc(100vw - 68px));
     border-width: 6px;
     border-radius: 46px;
   }
