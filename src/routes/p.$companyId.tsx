@@ -27,6 +27,7 @@ function CompanyPoint() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(true);
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const submitting = useRef(false);
 
@@ -36,6 +37,7 @@ function CompanyPoint() {
     supabase.auth.signOut({ scope: "local" }).then(({ error: signOutError }) => {
       if (!active) return;
       if (signOutError) setError("Não foi possível preparar o aparelho. Atualize a página.");
+      else setReady(true);
       setPreparing(false);
     }).catch(() => { if (active) { setError("Não foi possível preparar o aparelho. Atualize a página."); setPreparing(false); } });
     return () => { active = false; };
@@ -49,7 +51,7 @@ function CompanyPoint() {
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || preparing || employee) return;
+    if (busy || !ready || employee) return;
     setBusy(true); setError(""); setReceipt(null);
     const form = new FormData(event.currentTarget);
     try {
@@ -118,7 +120,7 @@ function CompanyPoint() {
         <form className="mt-9 space-y-5" onSubmit={signIn}>
           <label className="block text-sm font-semibold">E-mail<Input className="mt-2 h-12" name="email" type="email" autoComplete="off" required disabled={preparing || busy} /></label>
           <label className="block text-sm font-semibold">Senha<Input className="mt-2 h-12" name="password" type="password" autoComplete="off" required disabled={preparing || busy} /></label>
-          <Button className="h-12 w-full" type="submit" disabled={preparing || busy || Boolean(error && preparing)}>{preparing ? "Preparando..." : busy ? "Entrando..." : "Entrar"}</Button>
+          <Button className="h-12 w-full" type="submit" disabled={!ready || busy}>{preparing ? "Preparando..." : busy ? "Entrando..." : "Entrar"}</Button>
         </form>
         <Link to="/" className="mt-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Voltar à Simbi</Link>
       </div>}
