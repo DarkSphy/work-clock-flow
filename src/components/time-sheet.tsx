@@ -1,3 +1,4 @@
+import { Brand } from "@/components/brand";
 import {
   dayStatus,
   hhmm,
@@ -23,7 +24,8 @@ export function TimeSheet({
       <header className="sheet-header">
         <div>
           <p className="sheet-brand">
-            simbi<span>CONTROLE DE JORNADA</span>
+            <Brand compact />
+            <span className="sheet-brand-caption">CONTROLE DE JORNADA</span>
           </p>
           <h1>Folha de ponto</h1>
           <p className="sheet-period">{monthLabel(data.month)}</p>

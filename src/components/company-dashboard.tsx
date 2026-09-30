@@ -1,3 +1,4 @@
+import { Brand } from "@/components/brand";
 import { useCompanyReport } from "@/hooks/use-company-report";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -48,7 +49,7 @@ export function CompanyDashboardView({
     <main className="min-h-svh bg-[#f5f5f7] px-5 py-6 text-[#1d1d1f] sm:px-8">
       <div className="mx-auto max-w-7xl">
         <header className="flex items-center justify-between border-b border-black/[.07] pb-5">
-          <span className="text-2xl font-semibold tracking-tight">simbi</span>
+          <Brand />
           <div className="flex items-center gap-4">
             <span className="hidden text-sm text-[#6e6e73] sm:inline">{company.name}</span>
             <Button variant="ghost" onClick={onSignOut}>

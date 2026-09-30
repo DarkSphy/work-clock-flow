@@ -1,3 +1,4 @@
+import { Brand } from "@/components/brand";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, Delete, LogIn, LogOut } from "lucide-react";
@@ -103,6 +104,9 @@ function CompanyPoint() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-[#f5f5f7] px-6 py-8 text-[#1d1d1f]">
       <section className="w-full max-w-sm text-center" aria-busy={busy}>
+        <div className="mb-8">
+          <Brand compact />
+        </div>
         {receipt ? (
           <div role="status">
             <div className="mx-auto grid size-20 place-items-center rounded-full bg-emerald-100 text-emerald-700">

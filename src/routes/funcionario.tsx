@@ -1,3 +1,4 @@
+import { Brand, BrandLoading } from "@/components/brand";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { LogOut } from "lucide-react";
@@ -158,14 +159,13 @@ function EmployeePortal() {
     setEntries([]);
     setError("");
   }
-  if (loading)
-    return <main className="grid min-h-svh place-items-center">Carregando seu acesso...</main>;
+  if (loading) return <BrandLoading label="Carregando seu acesso" />;
   if (!worker)
     return (
       <main className="flex min-h-svh items-center justify-center bg-[#f5f5f7] p-6">
         <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm">
           <Link to="/" className="text-2xl font-semibold">
-            simbi
+            <Brand />
           </Link>
           <p className="mt-10 text-xs font-bold tracking-widest text-blue-600">
             ACESSO DO FUNCIONÁRIO
@@ -218,7 +218,7 @@ function EmployeePortal() {
       <div className="mx-auto max-w-6xl">
         <header className="flex items-center justify-between border-b border-black/10 pb-5">
           <Link to="/" className="text-2xl font-semibold">
-            simbi
+            <Brand />
           </Link>
           <Button variant="ghost" onClick={logout}>
             <LogOut className="size-4" /> Sair

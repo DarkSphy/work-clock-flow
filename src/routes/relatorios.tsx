@@ -1,3 +1,4 @@
+import { Brand } from "@/components/brand";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ArrowLeft, Download, FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
@@ -57,7 +58,7 @@ function Reports() {
       <div className="report-screen mx-auto max-w-7xl">
         <header className="flex items-center justify-between border-b border-black/[.07] pb-5">
           <Link to="/" className="text-2xl font-semibold tracking-tight">
-            simbi
+            <Brand />
           </Link>
           <Button variant="ghost" asChild>
             <Link to="/">

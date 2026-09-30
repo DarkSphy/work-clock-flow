@@ -30,7 +30,7 @@
   letter-spacing: -1px;
   margin: 0 0 12px;
 }
-.sheet-brand span {
+.sheet-brand > .sheet-brand-caption {
   display: inline-block;
   color: #718096;
   font-size: 8px;

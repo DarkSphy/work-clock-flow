@@ -1,0 +1,74 @@
+.simbi-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  vertical-align: middle;
+  color: inherit;
+  line-height: 1;
+}
+.simbi-brand__symbol,
+.simbi-brand__word {
+  display: block;
+  flex-shrink: 0;
+  background: currentColor;
+  mask-image: url("/brand/simbi-original.png");
+  mask-repeat: no-repeat;
+}
+/* Crop the original transparent canvas in CSS, preserving the supplied outlines. */
+.simbi-brand__symbol {
+  width: 32px;
+  height: 37px;
+  mask-size: 227.174% 200%;
+  mask-position: 53.846% 33.174%;
+  background: linear-gradient(145deg, #36b5f9 4%, #316bff 52%, #7661ff 95%);
+}
+.simbi-brand__word {
+  width: 88px;
+  height: 29px;
+  mask-size: 155.97% 478.626%;
+  mask-position: 52.667% 88.911%;
+}
+.simbi-brand--compact .simbi-brand__symbol {
+  width: 26px;
+  height: 30px;
+}
+.simbi-brand--compact .simbi-brand__word {
+  width: 72px;
+  height: 24px;
+}
+.simbi-brand--stacked {
+  flex-direction: column;
+  gap: 14px;
+}
+.simbi-brand--stacked .simbi-brand__symbol {
+  width: 92px;
+  height: 105px;
+}
+.simbi-brand--stacked .simbi-brand__word {
+  width: 128px;
+  height: 41px;
+}
+.simbi-loading {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 32px;
+  color: #fff;
+  background: radial-gradient(ellipse at 50% 38%, #172a51, #0b1122 48%, #070b14 85%);
+}
+.simbi-loading__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+@media print {
+  .simbi-brand__symbol {
+    background: currentColor;
+  }
+  .simbi-brand {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
