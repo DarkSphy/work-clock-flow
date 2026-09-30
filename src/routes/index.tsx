@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, BarChart3, Building2, CalendarDays, Check, ChevronRight, Clock3, Copy, Link2, LogOut, Pencil, Plus, ShieldCheck, Smartphone, Trash2, Users, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
+import { CompanyDashboardView } from "@/components/company-dashboard";
 import { EmployeeSchedule } from "@/components/employee-schedule";
 import { defaultSchedule, readSchedule, localDate, duration, hours } from "@/lib/work-schedule";
 import { Button } from "@/components/ui/button";
@@ -45,13 +46,11 @@ function Index() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
-  const [entries, setEntries] = useState<Entry[]>([]);
+
   const [members, setMembers] = useState<Member[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [clock, setClock] = useState(new Date());
-  const [showTeam, setShowTeam] = useState(false);
 
   const loadWorkspace = useCallback(async (currentUser: SessionUser) => {
     const { data: profileData, error: profileError } = await supabase
@@ -67,14 +66,13 @@ function Index() {
       return;
     }
 
-    const [{ data: companyData }, { data: entryData }, { data: roleData }, { data: memberData }] = await Promise.all([
+    const [{ data: companyData }, { data: roleData }, { data: memberData }] = await Promise.all([
       supabase.from("companies").select("id, name, workday_minutes, work_start, work_end, break_minutes").eq("id", nextProfile.company_id).single(),
-      supabase.from("time_entries").select("id, user_id, event_type, recorded_at").eq("company_id", nextProfile.company_id).order("recorded_at", { ascending: false }).limit(1000),
       supabase.from("user_roles").select("role").eq("user_id", currentUser.id).eq("role", "admin").maybeSingle(),
       supabase.from("profiles").select("user_id, full_name, job_title, work_start, work_end, break_minutes, work_schedule, employment_start").eq("company_id", nextProfile.company_id),
     ]);
     setCompany(companyData as Company | null);
-    setEntries((entryData ?? []) as Entry[]);
+
     setIsAdmin(Boolean(roleData));
     setMembers((memberData ?? []) as Member[]);
     setLoading(false);
@@ -89,39 +87,23 @@ function Index() {
     }).catch(() => { setMessage("Não foi possível conectar à sua conta. Atualize a página e tente novamente."); setLoading(false); });
   }, [loadWorkspace]);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => setClock(new Date()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
   if (loading) return <LoadingScreen />;
   if (!user) return <AuthScreen onSignedIn={(next) => { setUser(next); setLoading(true); loadWorkspace(next); }} />;
   if (message && !profile) return <AppBackdrop><main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-5 text-center"><p>{message}</p><Button onClick={() => window.location.reload()}>Tentar novamente</Button></main></AppBackdrop>;
   if (!profile?.company_id) return <Onboarding user={user} profile={profile} onDone={() => loadWorkspace(user)} />;
   if (!company) return <AppBackdrop><p>Não foi possível carregar a empresa.</p></AppBackdrop>;
 
-  if (isAdmin) return <CompanyDashboard company={company} members={members.filter((member) => member.user_id !== user.id)} entries={entries} clock={clock} onSignOut={signOut} onCreated={() => loadWorkspace(user)} />;
+  if (isAdmin) return <CompanyDashboard company={company} members={members.filter((member) => member.user_id !== user.id)} onSignOut={signOut} onCreated={() => loadWorkspace(user)} />;
 
   async function signOut() { await supabase.auth.signOut({ scope: "local" }); setUser(null); setProfile(null); setCompany(null); }
   return <Navigate to="/funcionario" />;
 }
 
-function CompanyDashboard({ company, members, entries, clock, onSignOut, onCreated }: { company: Company; members: Member[]; entries: Entry[]; clock: Date; onSignOut: () => void; onCreated: () => void }) {
-  const [showTeam, setShowTeam] = useState(false); const [copied, setCopied] = useState(false);
-  const today = entries.filter((entry) => new Date(entry.recorded_at).toDateString() === clock.toDateString());
-  const working = members.filter((member) => today.filter((entry) => entry.user_id === member.user_id).length % 2 === 1);
-  const totalToday = members.reduce((sum, member) => sum + calculateWorkedMinutes(today.filter((entry) => entry.user_id === member.user_id).reverse(), clock), 0);
-  const accessLink = `${typeof window === "undefined" ? "" : window.location.origin}/p/${company.id}`;
-  async function copyAccessLink() { try { await navigator.clipboard.writeText(accessLink); setCopied(true); window.setTimeout(() => setCopied(false), 2500); } catch { setCopied(false); } }
-  return <AppBackdrop><div className="relative mx-auto min-h-screen max-w-7xl px-5 py-6 lg:px-8 lg:py-7">
-    <header className="flex items-center justify-between border-b border-black/[.07] pb-5"><Brand /><div className="flex items-center gap-3"><span className="hidden text-sm text-muted-foreground sm:inline">{company.name}</span><Button variant="ghost" size="icon" onClick={onSignOut} aria-label="Sair"><LogOut /></Button></div></header>
-    <main className="py-10 lg:py-14"><div className="flex flex-wrap items-end justify-between gap-5"><div><p className="text-sm font-semibold text-[#0066cc]">PAINEL DA EMPRESA</p><h1 className="mt-3 font-display text-4xl font-black tracking-[-.045em] sm:text-6xl">Sua equipe em tempo real.</h1><p className="mt-3 text-muted-foreground">{formatLongDate(clock)} · {company.name}</p></div><Button variant="kinetic" onClick={() => setShowTeam(true)}><Plus /> Adicionar funcionário</Button></div>
-      <div className="mt-10 grid gap-4 sm:grid-cols-3"><Summary icon={<Users />} label="Funcionários" value={String(members.length)} detail="pessoas cadastradas" /><Summary icon={<Clock3 />} label="Em expediente" value={String(working.length)} detail="com ponto aberto agora" /><Summary icon={<Building2 />} label="Horas registradas hoje" value={formatClock(totalToday)} detail="somadas para toda a equipe" /></div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.45fr_.75fr]"><section className="glass-panel rounded-[28px] p-5 sm:p-7"><div className="flex items-center justify-between gap-3"><div><Label>Equipe</Label><h2 className="mt-2 font-display text-2xl font-black tracking-tight">Ponto e horários</h2></div><Button variant="glass" onClick={() => setShowTeam(true)}>Gerenciar</Button></div>{members.length === 0 ? <p className="py-16 text-center text-sm text-muted-foreground">Cadastre o primeiro funcionário para acompanhar os horários aqui.</p> : <div className="mt-6 space-y-2">{members.map((member) => { const memberToday = today.filter((entry) => entry.user_id === member.user_id); const latest = memberToday[0]; const open = memberToday.length % 2 === 1; const plan = readSchedule(member.work_schedule, defaultSchedule(member.work_start ?? company.work_start, member.work_end ?? company.work_end, member.break_minutes ?? company.break_minutes))[new Date(`${localDate(clock)}T12:00:00-03:00`).getUTCDay()]!; const start = plan.start; const now = clock.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); const late = plan.enabled && !open && memberToday.length === 0 && now > start; return <div key={member.user_id} className="grid gap-3 rounded-2xl border border-black/[.06] bg-white p-4 sm:grid-cols-[1.45fr_1fr_1fr_1fr] sm:items-center"><div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-full bg-[#eaf3ff] text-xs font-black text-[#0066cc]">{initials(member.full_name)}</div><div><p className="font-bold">{member.full_name}</p><p className="text-xs text-muted-foreground">{member.job_title || "Funcionário"} · {plan.enabled ? `${start}–${plan.end}` : "Folga"}</p></div></div><div><Label>Situação</Label><p className={open ? "font-semibold text-[#15704a]" : late ? "font-semibold text-[#d97706]" : "font-semibold text-muted-foreground"}>{open ? "Em expediente" : late ? "Sem entrada" : "Fora do expediente"}</p></div><div><Label>Último registro</Label><p className="font-semibold">{latest ? `${latest.event_type === "clock_in" ? "Entrada" : "Saída"} · ${formatTime(latest.recorded_at)}` : late ? "Alerta: atraso" : "Sem registro hoje"}</p></div><div><Label>Hoje · previsto</Label><p className="font-semibold tabular-nums">{formatClock(calculateWorkedMinutes([...memberToday].reverse(), clock))} · {plan.enabled ? hours(duration(plan.start, plan.end) - plan.breakMinutes) : "Folga"}</p></div></div>; })}</div>}</section>
-        <aside className="space-y-6"><section className="rounded-[28px] bg-[#1d1d1f] p-6 text-white"><Link2 className="size-6 text-[#2997ff]" /><p className="mt-8 text-sm font-semibold text-white/55">ACESSO DA EQUIPE</p><h2 className="mt-2 text-2xl font-semibold tracking-tight">Link de ponto da sua empresa.</h2><p className="mt-3 text-sm leading-relaxed text-white/60">Abra este endereço no aparelho compartilhado. Cada funcionário digita seu PIN de 4 dígitos e confirma a entrada ou saída. O e-mail e a senha servem para consultar o painel pessoal.</p><div className="mt-6 break-all rounded-xl bg-white/10 px-3 py-3 text-xs text-white/70">{accessLink}</div><Button variant="secondary" className="mt-3 w-full" onClick={copyAccessLink}><Copy className="size-4" />{copied ? "Link copiado" : "Copiar link de ponto"}</Button></section><section className="glass-panel rounded-[28px] p-6"><Label>Resumo do dia</Label><div className="mt-6 flex h-24 items-end gap-2">{[42, 66, 52, 85, 74, 92, 68].map((height, index) => <div key={index} className="flex-1 rounded-t-md bg-[#0071e3]" style={{ height: `${height}%`, opacity: .35 + index / 15 }} />)}</div><div className="mt-4 flex justify-between text-[10px] text-muted-foreground"><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span></div><p className="mt-6 border-t border-black/[.08] pt-5 text-sm text-muted-foreground">Acompanhe as horas registradas e intervenha antes do fechamento.</p></section></aside></div>
-    </main></div>{showTeam && <TeamDialog company={company} members={members} onClose={() => setShowTeam(false)} onCreated={onCreated} />}</AppBackdrop>;
+function CompanyDashboard({ company, members, onSignOut, onCreated }: { company: Company; members: Member[]; onSignOut: () => void; onCreated: () => void }) {
+  const [showTeam, setShowTeam] = useState(false);
+  const [revision, setRevision] = useState(0);
+  return <><CompanyDashboardView company={company} onSignOut={onSignOut} onManage={() => setShowTeam(true)} revision={revision} />{showTeam && <TeamDialog company={company} members={members} onClose={() => setShowTeam(false)} onCreated={() => { setRevision((value) => value + 1); onCreated(); }} />}</>;
 }
-
 function AuthScreen({ onSignedIn }: { onSignedIn: (user: SessionUser) => void }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [busy, setBusy] = useState(false);

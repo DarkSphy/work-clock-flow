@@ -1,0 +1,228 @@
+.print-area {
+  display: none;
+}
+.sheet-preview {
+  max-width: 850px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 20px;
+  border: 1px solid #e4e7ec;
+  padding: 36px;
+  color: #1d1d1f;
+}
+.time-sheet {
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #172335;
+}
+.sheet-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 3px solid #0071e3;
+  padding-bottom: 14px;
+}
+.sheet-brand {
+  color: #0071e3;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin: 0 0 12px;
+}
+.sheet-brand span {
+  display: inline-block;
+  color: #718096;
+  font-size: 8px;
+  letter-spacing: 1.3px;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+.sheet-header h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  margin: 0;
+}
+.sheet-period {
+  text-transform: capitalize;
+  font-size: 12px;
+  color: #677487;
+  margin: 4px 0 0;
+}
+.sheet-meta {
+  text-align: right;
+  font-size: 9px;
+  color: #677487;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.sheet-meta strong {
+  color: #0071e3;
+  font-size: 8px;
+  letter-spacing: 0.8px;
+}
+.sheet-identification {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+  margin: 15px 0;
+}
+.sheet-identification span {
+  display: block;
+  color: #718096;
+  font-size: 8px;
+  letter-spacing: 0.7px;
+  margin-bottom: 3px;
+}
+.sheet-identification strong {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.sheet-totals {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: #eff5fc;
+  border: 1px solid #dce8f5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
+.sheet-totals span {
+  display: block;
+  color: #637186;
+  font-size: 8px;
+}
+.sheet-totals strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 9px;
+}
+.sheet-table th {
+  text-align: left;
+  background: #172335;
+  color: white;
+  padding: 6px 5px;
+  font-weight: 500;
+  font-size: 8px;
+}
+.sheet-table td {
+  padding: 3px 5px;
+  border-bottom: 1px solid #e7ecf2;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+.sheet-table tbody tr:nth-child(even) {
+  background: #f7f9fc;
+}
+.sheet-table .sheet-pending {
+  background: #fff6e5;
+}
+.sheet-table small {
+  display: inline;
+  margin-left: 4px;
+  font-size: 7px;
+  color: #677487;
+}
+.sheet-weekday {
+  color: #677487;
+  font-size: 7px;
+}
+.sheet-punches {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.sheet-footer {
+  break-inside: avoid;
+}
+.sheet-note {
+  font-size: 7px;
+  color: #637186;
+  line-height: 1.4;
+  margin: 10px 0;
+}
+.sheet-observations {
+  font-size: 9px;
+  margin-top: 12px;
+}
+.sheet-observations div {
+  border-bottom: 1px solid #d6dde7;
+  height: 15px;
+}
+.sheet-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 36px;
+  margin-top: 30px;
+}
+.sheet-signatures div {
+  border-top: 1px solid #64748b;
+  text-align: center;
+  padding-top: 7px;
+  font-size: 9px;
+}
+.sheet-signatures small {
+  display: block;
+  margin-top: 5px;
+  font-size: 8px;
+  color: #637186;
+}
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
+  html:has(.report-page),
+  body:has(.report-page) {
+    background: white !important;
+  }
+  .report-screen {
+    display: none !important;
+  }
+  .report-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+  }
+  .print-area {
+    display: block;
+  }
+  .time-sheet {
+    break-after: page;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .time-sheet:last-child {
+    break-after: auto;
+  }
+  .sheet-table thead {
+    display: table-header-group;
+  }
+  .sheet-table tr {
+    break-inside: avoid;
+  }
+  .sheet-table td {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    line-height: 1.25;
+  }
+  .sheet-brand {
+    margin-bottom: 6px;
+  }
+  .sheet-header {
+    padding-bottom: 10px;
+  }
+  .sheet-identification {
+    gap: 8px 24px;
+    margin: 10px 0;
+  }
+}
