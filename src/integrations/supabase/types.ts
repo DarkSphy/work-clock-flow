@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      clock_photos: {
+        Row: { entry_id: string; ticket_id: string; company_id: string; user_id: string; object_path: string; recorded_at: string; event_type: "clock_in" | "clock_out" }
+        Insert: { entry_id: string; ticket_id: string; company_id: string; user_id: string; object_path: string; recorded_at: string; event_type: "clock_in" | "clock_out" }
+        Update: { object_path?: string }
+        Relationships: []
+      }
       companies: {
         Row: {
           break_minutes: number
@@ -164,6 +170,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      prepare_clock_photo: { Args: { p_company: string; p_ticket: string }; Returns: Json }
       employee_pin_status: { Args: { p_company: string }; Returns: { user_id: string }[] }
       employee_pin_available: { Args: { p_company: string; p_pin: string; p_user?: string }; Returns: boolean }
       set_employee_pin: { Args: { p_company: string; p_user: string; p_pin: string }; Returns: undefined }

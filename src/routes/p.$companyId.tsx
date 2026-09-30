@@ -1,4 +1,5 @@
 import { Brand } from "@/components/brand";
+import { ClockCamera } from "@/components/clock-camera";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, Delete, LogIn, LogOut } from "lucide-react";
@@ -20,6 +21,8 @@ function CompanyPoint() {
   const confirm = useServerFn(confirmClockPin);
   const [pin, setPin] = useState("");
   const [person, setPerson] = useState<Person | null>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const [receipt, setReceipt] = useState<{
     name: string;
     eventType: string;
@@ -33,16 +36,20 @@ function CompanyPoint() {
     setReady(true);
   }, []);
   function reset() {
+    if (inFlight.current) return;
     setPin("");
+    setPhoto(null);
+    setRetrying(false);
     setPerson(null);
     setReceipt(null);
     setError("");
   }
   useEffect(() => {
     if (!person && !receipt) return;
-    const timeout = window.setTimeout(reset, receipt ? 6000 : 45000);
+    if (busy) return;
+    const timeout = window.setTimeout(reset, receipt ? 6000 : 150000);
     return () => window.clearTimeout(timeout);
-  }, [person, receipt]);
+  }, [person, receipt, busy]);
   async function digit(value: string) {
     if (!ready || inFlight.current || person || receipt) return;
     const next = value === "delete" ? pin.slice(0, -1) : (pin + value).slice(0, 4);
@@ -78,23 +85,28 @@ function CompanyPoint() {
     return () => window.removeEventListener("keydown", key);
   });
   async function register() {
-    if (!person || inFlight.current) return;
+    if (!person || !photo || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     setError("");
     try {
-      const result = await confirm({ data: { companyId, ticket: person.ticket } });
+      const result = await confirm({ data: { companyId, ticket: person.ticket, photo } });
       if ("error" in result) {
         setPerson(null);
+        setPhoto(null);
+        setRetrying(false);
         setError(result.error);
       } else {
         setReceipt({ ...result, name: person.name });
         setPerson(null);
+        setPhoto(null);
+        setRetrying(false);
       }
     } catch {
-      setPerson(null);
+      // Preserve the ticket and captured photo to safely retry a lost response.
+      setRetrying(true);
       setError(
-        "Não foi possível confirmar. Confira seus registros com o responsável antes de repetir.",
+        "Não recebemos a confirmação. Toque em Tentar confirmar novamente; isso não duplica o ponto. Se precisar cancelar, confira o registro com o responsável.",
       );
     } finally {
       inFlight.current = false;
@@ -141,16 +153,19 @@ function CompanyPoint() {
             <p className="mt-5 text-xl">
               Você está {person.eventType === "clock_in" ? "entrando" : "saindo"}.
             </p>
+            <ClockCamera photo={photo} onPhoto={setPhoto} disabled={busy || retrying} />
             <Button
               className="mt-8 h-16 w-full rounded-2xl text-lg"
-              disabled={!ready || busy}
+              disabled={!ready || busy || !photo}
               onClick={register}
             >
               {busy
                 ? "Registrando..."
-                : person.eventType === "clock_in"
-                  ? "Confirmar entrada"
-                  : "Confirmar saída"}
+                : retrying
+                  ? "Tentar confirmar novamente"
+                  : person.eventType === "clock_in"
+                    ? "Confirmar entrada"
+                    : "Confirmar saída"}
             </Button>
             <Button variant="ghost" className="mt-3 h-12 w-full" disabled={busy} onClick={reset}>
               Não sou eu / Cancelar

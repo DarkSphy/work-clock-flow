@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as FotosRouteImport } from './routes/fotos'
 import { Route as FuncionarioRouteImport } from './routes/funcionario'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as PCompanyIdRouteImport } from './routes/p.$companyId'
@@ -17,6 +18,11 @@ import { Route as PCompanyIdRouteImport } from './routes/p.$companyId'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FotosRoute = FotosRouteImport.update({
+  id: '/fotos',
+  path: '/fotos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FuncionarioRoute = FuncionarioRouteImport.update({
@@ -37,12 +43,14 @@ const PCompanyIdRoute = PCompanyIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/fotos': typeof FotosRoute
   '/funcionario': typeof FuncionarioRoute
   '/relatorios': typeof RelatoriosRoute
   '/p/$companyId': typeof PCompanyIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/fotos': typeof FotosRoute
   '/funcionario': typeof FuncionarioRoute
   '/relatorios': typeof RelatoriosRoute
   '/p/$companyId': typeof PCompanyIdRoute
@@ -50,20 +58,28 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/fotos': typeof FotosRoute
   '/funcionario': typeof FuncionarioRoute
   '/relatorios': typeof RelatoriosRoute
   '/p/$companyId': typeof PCompanyIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/funcionario' | '/relatorios' | '/p/$companyId'
+  fullPaths: '/' | '/fotos' | '/funcionario' | '/relatorios' | '/p/$companyId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/funcionario' | '/relatorios' | '/p/$companyId'
-  id: '__root__' | '/' | '/funcionario' | '/relatorios' | '/p/$companyId'
+  to: '/' | '/fotos' | '/funcionario' | '/relatorios' | '/p/$companyId'
+  id:
+    | '__root__'
+    | '/'
+    | '/fotos'
+    | '/funcionario'
+    | '/relatorios'
+    | '/p/$companyId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  FotosRoute: typeof FotosRoute
   FuncionarioRoute: typeof FuncionarioRoute
   RelatoriosRoute: typeof RelatoriosRoute
   PCompanyIdRoute: typeof PCompanyIdRoute
@@ -76,6 +92,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fotos': {
+      id: '/fotos'
+      path: '/fotos'
+      fullPath: '/fotos'
+      preLoaderRoute: typeof FotosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/funcionario': {
@@ -104,6 +127,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  FotosRoute: FotosRoute,
   FuncionarioRoute: FuncionarioRoute,
   RelatoriosRoute: RelatoriosRoute,
   PCompanyIdRoute: PCompanyIdRoute,

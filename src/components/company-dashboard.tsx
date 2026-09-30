@@ -71,6 +71,9 @@ export function CompanyDashboardView({
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" asChild>
+                <Link to="/fotos">Fotos dos registros</Link>
+              </Button>
+              <Button variant="outline" asChild>
                 <Link to="/relatorios">
                   <FileText className="size-4" />
                   Relatórios
